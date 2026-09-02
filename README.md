@@ -29,6 +29,7 @@
 - **Data Logging & Export:** 
 - **Cleaning code** 
 - **Tune controllers and add new ones**
+- **Translate to english**
 
 ---
 
