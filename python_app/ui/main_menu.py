@@ -1,11 +1,15 @@
 import sys
+import config
+from OpenGL.GL import *
 import pygame
 from pygame.locals import *
-from OpenGL.GL import *
-import config
-from serial_handler import close_serial
+
+# Pamiętaj o zaimportowaniu close_serial, jeśli używasz portu szeregowego
+# from serial_utils import close_serial
+
 
 class MainMenu:
+
     def __init__(self, width, height):
         self.width = width
         self.height = height
@@ -63,29 +67,46 @@ class MainMenu:
     def handle_event(self, event):
         if event.type == MOUSEMOTION:
             mx, my = event.pos
+            old_hover = self.hovered_index
             self.hovered_index = -1
             for card in self.cards:
                 if card["rect"].collidepoint(mx, my):
                     self.hovered_index = card["id"]
                     break
+            # Zwraca True tylko wtedy, gdy stan najechania myszy się zmienił (potrzebne do przerysowania)
+            return old_hover != self.hovered_index
 
         elif event.type == MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
             for card in self.cards:
                 if card["rect"].collidepoint(mx, my):
                     return self.mode_keys[card["id"]]
-        return None
+        return False
 
     def draw(self, surface):
         surface.fill((15, 18, 26))
 
-        title_txt = self.font_title.render("CONTROL SYSTEMS LAB", True, (0, 210, 255))
-        sub_txt = self.font_subtitle.render("Wybierz układ do symulacji i analizy regulatorów", True, (160, 175, 200))
+        title_txt = self.font_title.render(
+            "CONTROL SYSTEMS LAB", True, (0, 210, 255)
+        )
+        sub_txt = self.font_subtitle.render(
+            "Wybierz układ do symulacji i analizy regulatorów",
+            True,
+            (160, 175, 200),
+        )
 
-        surface.blit(title_txt, title_txt.get_rect(center=(self.width // 2, 85)))
+        surface.blit(
+            title_txt, title_txt.get_rect(center=(self.width // 2, 85))
+        )
         surface.blit(sub_txt, sub_txt.get_rect(center=(self.width // 2, 135)))
 
-        pygame.draw.line(surface, (35, 45, 65), (self.width // 2 - 250, 165), (self.width // 2 + 250, 165), 1)
+        pygame.draw.line(
+            surface,
+            (35, 45, 65),
+            (self.width // 2 - 250, 165),
+            (self.width // 2 + 250, 165),
+            1,
+        )
 
         for card in self.cards:
             rect = card["rect"]
@@ -97,47 +118,79 @@ class MainMenu:
             desc_color = (140, 180, 220) if is_hovered else (110, 125, 150)
 
             pygame.draw.rect(surface, bg_color, rect, border_radius=12)
-            pygame.draw.rect(surface, border_color, rect, width=2 if is_hovered else 1, border_radius=12)
+            pygame.draw.rect(
+                surface,
+                border_color,
+                rect,
+                width=2 if is_hovered else 1,
+                border_radius=12,
+            )
 
-            t_surf = self.font_card_title.render(card["title"], True, title_color)
+            t_surf = self.font_card_title.render(
+                card["title"], True, title_color
+            )
             d_surf = self.font_card_desc.render(card["desc"], True, desc_color)
 
             surface.blit(t_surf, (rect.x + 20, rect.y + 35))
             surface.blit(d_surf, (rect.x + 20, rect.y + 75))
 
             accent_color = (0, 210, 255) if is_hovered else (0, 120, 180)
-            pygame.draw.rect(surface, accent_color, (rect.x + 8, rect.y + 30, 4, rect.h - 60), border_radius=2)
+            pygame.draw.rect(
+                surface,
+                accent_color,
+                (rect.x + 8, rect.y + 30, 4, rect.h - 60),
+                border_radius=2,
+            )
 
 
 def show_selection_menu(screen, clock):
     w, h = config.WINDOW_WIDTH, config.WINDOW_HEIGHT
     menu = MainMenu(w, h)
 
+    # Inicjalizacja tekstury w OpenGL z odpowiednim rozmiarem
     tex_id = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, tex_id)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, None
+    )
+
+    menu_surface = pygame.Surface((w, h))
+    needs_update = True  # Flaga określająca konieczność odświeżenia tekstury GPU
 
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
                 glDeleteTextures([tex_id])
-                close_serial()
+                # Jeśli zdefiniowałeś close_serial(), odkomentuj poniżej:
+                # close_serial()
                 pygame.quit()
                 sys.exit()
 
-            selected_mode = menu.handle_event(event)
-            if selected_mode:
+            res = menu.handle_event(event)
+            if isinstance(res, str):  # Został wybrany tryb
                 glDeleteTextures([tex_id])
-                return selected_mode
+                return res
+            elif res is True:  # Nastąpiła zmiana stanu hover
+                needs_update = True
 
+        # Aktualizacja tekstury na GPU tylko w przypadku zmiany stanu menu
+        if needs_update:
+            menu.draw(menu_surface)
+            texture_data = pygame.image.tostring(menu_surface, "RGBA", True)
+
+            glBindTexture(GL_TEXTURE_2D, tex_id)
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+            # Użycie SubImage zapobiega alokacji nowej pamięci na karcie
+            glTexSubImage2D(
+                GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, texture_data
+            )
+            needs_update = False
+
+        # Rendering sceny 2D w OpenGL
         glClearColor(0.1, 0.12, 0.18, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
-        menu_surface = pygame.Surface((w, h))
-        menu.draw(menu_surface)
-
-        texture_data = pygame.image.tostring(menu_surface, "RGBA", True)
 
         glViewport(0, 0, w, h)
         glMatrixMode(GL_PROJECTION)
@@ -151,15 +204,17 @@ def show_selection_menu(screen, clock):
         glEnable(GL_TEXTURE_2D)
 
         glBindTexture(GL_TEXTURE_2D, tex_id)
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data)
 
         glColor4f(1.0, 1.0, 1.0, 1.0)
         glBegin(GL_QUADS)
-        glTexCoord2f(0, 0); glVertex2f(0, 0)
-        glTexCoord2f(1, 0); glVertex2f(w, 0)
-        glTexCoord2f(1, 1); glVertex2f(w, h)
-        glTexCoord2f(0, 1); glVertex2f(0, h)
+        glTexCoord2f(0, 0)
+        glVertex2f(0, 0)
+        glTexCoord2f(1, 0)
+        glVertex2f(w, 0)
+        glTexCoord2f(1, 1)
+        glVertex2f(w, h)
+        glTexCoord2f(0, 1)
+        glVertex2f(0, h)
         glEnd()
 
         glDisable(GL_TEXTURE_2D)

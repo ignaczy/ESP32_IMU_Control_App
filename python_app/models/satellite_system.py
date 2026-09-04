@@ -1,8 +1,7 @@
 import math
-import random
 from collections import deque
-from OpenGL.GL import *
-from OpenGL.GLU import *
+from models.base_system import BaseSystem
+from ui.renderer_3d import draw_satellite_scene
 
 
 def angle_difference(target, current):
@@ -11,34 +10,6 @@ def angle_difference(target, current):
 
 def normalize_angle(angle):
     return (angle + math.pi) % (2 * math.pi) - math.pi
-
-
-# --- MATERIAŁY I GEOMETRIA Z ORYGINALNEGO KODU ---
-def apply_material(diffuse, specular=[0.0, 0.0, 0.0, 1.0], shininess=0.0):
-    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, diffuse)
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specular)
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, shininess)
-
-
-def draw_box(dx, dy, dz):
-    hx, hy, hz = dx / 2.0, dy / 2.0, dz / 2.0
-    faces = [
-        ((0, 0, 1),  [(-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz)]),
-        ((0, 0, -1), [(-hx, hy, -hz), (hx, hy, -hz), (hx, -hy, -hz), (-hx, -hy, -hz)]),
-        ((0, 1, 0),  [(-hx, hy, -hz), (-hx, hy, hz), (hx, hy, hz), (hx, hy, -hz)]),
-        ((0, -1, 0), [(-hx, -hy, -hz), (hx, -hy, -hz), (hx, -hy, hz), (-hx, -hy, hz)]),
-        ((1, 0, 0),  [(hx, -hy, -hz), (hx, hy, -hz), (hx, hy, hz), (hx, -hy, hz)]),
-        ((-1, 0, 0), [(-hx, -hy, -hz), (-hx, -hy, hz), (-hx, hy, hz), (-hx, hy, -hz)])
-    ]
-    glBegin(GL_QUADS)
-    for normal, vertices in faces:
-        glNormal3f(*normal)
-        for v in vertices:
-            glVertex3f(*v)
-    glEnd()
-
-
-STARS = [(random.uniform(-10, 10), random.uniform(-10, 10), random.uniform(-8, -2)) for _ in range(150)]
 
 
 class SatellitePID:
@@ -64,9 +35,10 @@ class SatellitePID:
         return max(-self.max_torque, min(self.max_torque, output))
 
 
-class SatelliteSystem:
+class SatelliteSystem(BaseSystem):
     def __init__(self):
-        # Parametry fizyczne z oryginalnego kodu
+        super().__init__()
+        # Parametry fizyczne
         self.I_sat = 2.5        # Moment bezwładności kadłuba [kg*m^2]
         self.I_wheel = 0.3      # Moment bezwładności koła zamachowego [kg*m^2]
         self.max_wheel_speed = 300.0
@@ -102,7 +74,7 @@ class SatelliteSystem:
         self.hist_pv.extend([0.0] * self.max_hist)
         self.hist_wheel_speed.extend([0.0] * self.max_hist)
 
-    def set_target_from_input(self, norm_x):
+    def set_target_from_input(self, norm_x, norm_y=0.5):
         self.setpoint_angle = normalize_angle((norm_x - 0.5) * 2.0 * math.pi)
 
     def update(self, dt):
@@ -155,185 +127,7 @@ class SatelliteSystem:
         }
 
     def render_3d(self):
-        self.draw_3d()
+        draw_satellite_scene(self)
 
     def draw_3d(self):
-        # Resetowanie stanu OpenGL przed rysowaniem
-        glDisable(GL_COLOR_MATERIAL)
-        glEnable(GL_LIGHTING)
-        glEnable(GL_LIGHT0)
-        glShadeModel(GL_SMOOTH)
-
-        glLightfv(GL_LIGHT0, GL_POSITION, [3.0, 4.0, 5.0, 1.0])
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 0.98, 0.9, 1.0])
-        glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
-        glLightfv(GL_LIGHT0, GL_AMBIENT, [0.2, 0.22, 0.3, 1.0])
-
-        self._draw_space_background()
-        self._draw_target_indicator(self.setpoint_angle)
-        self._draw_satellite_3d()
-
-    def _draw_space_background(self):
-        glDisable(GL_LIGHTING)
-        glPointSize(1.5)
-        glBegin(GL_POINTS)
-        glColor3f(0.8, 0.8, 1.0)
-        for st in STARS:
-            glVertex3f(*st)
-        glEnd()
-
-        glLineWidth(1)
-        glBegin(GL_LINES)
-        glColor3f(0.12, 0.15, 0.22)
-        for r in [1.5, 2.5, 3.5]:
-            for i in range(36):
-                a1 = 2 * math.pi * i / 36
-                a2 = 2 * math.pi * (i + 1) / 36
-                glVertex3f(r * math.cos(a1), r * math.sin(a1), -0.5)
-                glVertex3f(r * math.cos(a2), r * math.sin(a2), -0.5)
-        glEnd()
-        glEnable(GL_LIGHTING)
-
-    def _draw_target_indicator(self, angle):
-        glPushMatrix()
-        glRotatef(math.degrees(angle), 0, 0, 1)
-        glDisable(GL_LIGHTING)
-        glColor3f(1.0, 0.8, 0.2)
-        glLineWidth(2)
-        glBegin(GL_LINES)
-        glVertex3f(0.0, 0.0, 0.0)
-        glVertex3f(2.0, 0.0, 0.0)
-        glEnd()
-
-        glBegin(GL_TRIANGLES)
-        glVertex3f(2.0, 0.0, 0.0)
-        glVertex3f(1.8, 0.08, 0.0)
-        glVertex3f(1.8, -0.08, 0.0)
-        glEnd()
-        glEnable(GL_LIGHTING)
-        glPopMatrix()
-
-    def _draw_solar_panel(self):
-        # Podstawa panelu
-        apply_material([0.15, 0.15, 0.18, 1.0], [0.5, 0.5, 0.5, 1.0], 20.0)
-        draw_box(1.4, 0.65, 0.04)
-
-        # Siatka ogniw słonecznych (ciemnoniebieskie)
-        apply_material([0.02, 0.08, 0.35, 1.0], [0.6, 0.7, 1.0, 1.0], 80.0)
-        glPushMatrix()
-        glTranslatef(0, 0, 0.025)
-        for row in [-0.2, 0.2]:
-            for col in [-0.5, -0.2, 0.1, 0.4]:
-                glPushMatrix()
-                glTranslatef(col, row, 0)
-                draw_box(0.26, 0.22, 0.005)
-                glPopMatrix()
-        glPopMatrix()
-
-    def _draw_satellite_3d(self):
-        glPushMatrix()
-        glRotatef(math.degrees(self.angle_sat), 0, 0, 1)
-
-        quad = gluNewQuadric()
-        gluQuadricNormals(quad, GLU_SMOOTH)
-
-        # 1. Główny korpus (Antracytowy / Tytanowy)
-        apply_material([0.25, 0.27, 0.3, 1.0], [0.8, 0.8, 0.9, 1.0], 50.0)
-        draw_box(0.9, 0.9, 0.5)
-
-        # 2. Złota osłona termiczna (MLI) pośrodku
-        apply_material([0.9, 0.7, 0.1, 1.0], [1.0, 0.9, 0.4, 1.0], 90.0)
-        draw_box(0.92, 0.4, 0.52)
-
-        # 3. Panele Słoneczne (Lewy i Prawy)
-        glPushMatrix()
-        glTranslatef(-1.25, 0, 0)
-        self._draw_solar_panel()
-        glPopMatrix()
-
-        glPushMatrix()
-        glTranslatef(1.25, 0, 0)
-        self._draw_solar_panel()
-        glPopMatrix()
-
-        # 4. Wysięgniki paneli słonecznych
-        apply_material([0.6, 0.6, 0.65, 1.0], [0.9, 0.9, 0.9, 1.0], 30.0)
-        for side in [-1, 1]:
-            glPushMatrix()
-            glTranslatef(side * 0.5, 0, 0)
-            glRotatef(90, 0, 1, 0)
-            gluCylinder(quad, 0.025, 0.025, 0.1, 12, 1)
-            glPopMatrix()
-
-        # 5. Przód Satelity (Kamera / Sensor optyczny)
-        glPushMatrix()
-        glTranslatef(0.46, 0.0, 0.0)
-        apply_material([0.8, 0.1, 0.1, 1.0], [1.0, 0.5, 0.5, 1.0], 60.0)
-        draw_box(0.04, 0.35, 0.35)
-
-        glTranslatef(0.02, 0, 0)
-        glRotatef(90, 0, 1, 0)
-        apply_material([0.1, 0.1, 0.1, 1.0], [0.9, 0.9, 1.0, 1.0], 100.0)
-        gluCylinder(quad, 0.1, 0.08, 0.08, 16, 1)
-        gluDisk(quad, 0, 0.1, 16, 1)
-        glPopMatrix()
-
-        # 6. Tył Satelity - Antena paraboliczna
-        glPushMatrix()
-        glTranslatef(-0.46, 0, 0)
-        glRotatef(-90, 0, 1, 0)
-        apply_material([0.85, 0.85, 0.85, 1.0], [1.0, 1.0, 1.0, 1.0], 40.0)
-        gluCylinder(quad, 0.02, 0.18, 0.12, 16, 1)
-        glPopMatrix()
-
-        # 7. Koło Reakcyjne
-        glPushMatrix()
-        glTranslatef(0, 0, 0.25)
-
-        # Ciemna podstawa montażowa (Stojan silnika)
-        apply_material([0.12, 0.14, 0.18, 1.0], [0.3, 0.3, 0.3, 1.0], 10.0)
-        gluCylinder(quad, 0.38, 0.38, 0.04, 32, 1)
-
-        # Przejście do wirnika
-        glTranslatef(0, 0, 0.04)
-        glRotatef(math.degrees(self.angle_wheel), 0, 0, 1)
-
-        # Wewnętrzna piasta stalowa
-        apply_material([0.3, 0.32, 0.38, 1.0], [0.8, 0.8, 0.9, 1.0], 60.0)
-        gluCylinder(quad, 0.12, 0.12, 0.08, 24, 1)
-        gluDisk(quad, 0, 0.12, 24, 1)
-
-        # Mosiężny/Złoty pierścień masy bezwładnościowej
-        apply_material([0.85, 0.65, 0.15, 1.0], [1.0, 0.85, 0.4, 1.0], 80.0)
-        gluCylinder(quad, 0.36, 0.36, 0.08, 32, 1)
-        gluDisk(quad, 0.26, 0.36, 32, 1)
-
-        # 4 Ramiona łączące piastę z wieńcem
-        apply_material([0.2, 0.22, 0.25, 1.0], [0.5, 0.5, 0.5, 1.0], 30.0)
-        for i in range(4):
-            glPushMatrix()
-            glRotatef(i * 90, 0, 0, 1)
-            glTranslatef(0.19, 0, 0.04)
-            draw_box(0.16, 0.04, 0.03)
-            glPopMatrix()
-
-        # Wskaźnik obrotu
-        glDisable(GL_LIGHTING)
-        glColor3f(0.1, 1.0, 0.4)
-        glLineWidth(4)
-        glBegin(GL_LINES)
-        glVertex3f(-0.34, 0.0, 0.085)
-        glVertex3f(0.34, 0.0, 0.085)
-        glEnd()
-
-        glPointSize(6.0)
-        glBegin(GL_POINTS)
-        glVertex3f(0.0, -0.31, 0.085)
-        glVertex3f(0.0, 0.31, 0.085)
-        glEnd()
-        glEnable(GL_LIGHTING)
-
-        glPopMatrix()
-
-        gluDeleteQuadric(quad)
-        glPopMatrix()
+        self.render_3d()

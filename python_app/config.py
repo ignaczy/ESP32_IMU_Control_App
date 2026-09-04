@@ -14,7 +14,7 @@ SERIAL_TIMEOUT = 0.01
 
 # --- Kolorystyka UI ---
 COLOR_BG = (26, 30, 42)
-COLOR_TEXT = (240, 245, 255)
+COLOR_TEXT = (220, 220, 220)
 COLOR_PANEL_BG = (32, 38, 52)
 COLOR_PANEL_BORDER = (70, 80, 105)
 COLOR_GRID_LINE = (50, 58, 78)
@@ -24,16 +24,15 @@ COLOR_SLIDER_BG = (45, 52, 70)
 COLOR_SLIDER_HANDLE = (0, 160, 255)
 COLOR_SLIDER_BORDER = (255, 255, 255)
 
-# --- w pliku config.py ---
-
-# Kolory interfejsu
-COLOR_TEXT = (220, 220, 220)
-COLOR_BG = (26, 30, 42)
-
 # Kolory przycisków (Buttons)
 COLOR_BTN = (50, 60, 80)
 COLOR_BTN_HOVER = (70, 85, 115)
 COLOR_BTN_TEXT = (255, 255, 255)
+COLOR_BTN_RESET = (180, 50, 50)
+COLOR_BTN_RESET_HOVER = (220, 70, 70)
+
+SLIDER_MIN_VAL = -10.0
+SLIDER_MAX_VAL = 10.0
 
 # --- Parametry Suwnicy (Crane) ---
 CRANE_PARAMS = {
@@ -68,30 +67,23 @@ FURUTA_PARAMS = {
 }
 
 LQR_FURUTA_CONFIG = {
-    "max_torque": 2.5,                # Maksymalny moment obrotowy [Nm]
+    "max_torque": 2.5,                  # Maksymalny moment obrotowy [Nm]
     "initial_K": [-0.8, -0.5, 5.5, 0.8], # Domyślne wzmocnienia regulatora K_theta1, K_omega1, K_theta2, K_omega2
-    "activation_angle_deg": 30.0      # Maksymalny kąt wychylenia wahadła od pionu (w stopniach), przy którym LQR próbuje go stabilizować
+    "activation_angle_deg": 30.0        # Maksymalny kąt wychylenia wahadła od pionu (w stopniach)
 }
 
-SLIDER_MIN_VAL = -10.0
-SLIDER_MAX_VAL = 10.0
+# --- Parametry Quadrocoptera ---
+QUAD_PARAMS = {
+    "arm_len": 0.25,         # Długość ramienia [m]
+    "filter_window": 5       # Okno filtra uśredniającego
+}
 
-COLOR_BTN_RESET = (180, 50, 50)
-COLOR_BTN_RESET_HOVER = (220, 70, 70)
-
-
-# --- QUADROCOPTER CONFIGURATION ---
-SERIAL_PORT = 'COM8'
-BAUD_RATE = 115200
-
-QUAD_ARM_LEN = 0.25
-QUAD_FILTER_WINDOW = 5
-QUAD_KP_DEFAULT = 10.0
-QUAD_KI_DEFAULT = 0.0
-QUAD_KD_DEFAULT = 2.0
-QUAD_PID_LIMIT = 15.0
-
-
+PID_QUAD_CONFIG = {
+    "Kp_default": 10.0,
+    "Ki_default": 0.0,
+    "Kd_default": 2.0,
+    "limit_default": 15.0    # Limit wyjścia regulatora PID
+}
 
 # --- Parametry Ball & Plate System ---
 BALL_PLATE_PARAMS = {
@@ -111,7 +103,7 @@ PID_BALL_PLATE_CONFIG = {
     "integral_limit": 5.0     # Anty-windup dla całki
 }
 
-# --- SATELLITE CONFIGURATION ---
+# --- Parametry Satelity (Satellite) ---
 SATELLITE_CONFIG = {
     "I_sat": 2.5,                 # Moment bezwładności kadłuba [kg*m^2]
     "I_wheel": 0.3,               # Moment bezwładności koła zamachowego [kg*m^2]

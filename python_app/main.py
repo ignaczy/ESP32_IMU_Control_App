@@ -1,6 +1,6 @@
 import math
-from statistics import median
 from collections import deque
+from statistics import median
 
 import pygame
 from pygame.locals import *
@@ -8,11 +8,12 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 import config
-import serial_handler
-from renderers import draw_grid, draw_crane_scene
+from imu_reader import IMUReader
+from ui.renderer_3d import draw_furuta_3d, draw_crane_scene
 from ui.main_menu import show_selection_menu
 from ui.charts import draw_chart
 from ui.widgets import Button, Slider
+from ui.gl_utils import draw_grid
 
 from models.crane_system import CranePID, CraneSystem
 from models.furuta_system import FurutaSystem
@@ -21,7 +22,7 @@ from models.ball_and_plate_system import BallAndPlateSystem
 from models.satellite_system import SatelliteSystem
 
 
-def run_simulation(selected_mode, screen, clock, font_small, ser):
+def run_simulation(selected_mode, screen, clock, font_small, imu):
     gui_surface = pygame.Surface((config.PANEL_WIDTH, config.WINDOW_HEIGHT))
 
     gui_texture = glGenTextures(1)
@@ -59,7 +60,6 @@ def run_simulation(selected_mode, screen, clock, font_small, ser):
         btn_reset = Button(20, 115, 220, 25, "RESET STANU (SPACE)")
 
     setpoint_x = 0.0
-    roll_buffer = deque([0.0] * 5, maxlen=5)
 
     hist_target_x, hist_cart_x, hist_sway_angle = [], [], []
     hist_sp_x, hist_pv_x, hist_sp_y, hist_pv_y = [], [], [], []
@@ -138,31 +138,19 @@ def run_simulation(selected_mode, screen, clock, font_small, ser):
             system.pid.Kp = slider_kp.val
             system.pid.Kd = slider_kd.val
 
-        if ser is not None and ser.in_waiting:
-            try:
-                raw_data = ser.read_all().decode("utf-8", errors="ignore").splitlines()
-                if raw_data:
-                    latest_line = raw_data[-1]
-                    if "ROLL:" in latest_line:
-                        parts = latest_line.split(",")
-                        raw_roll = float(parts[0].split(":")[1])
-
-                        if selected_mode in ("QUADROCOPTER", "BALL_AND_PLATE") and "PITCH:" in latest_line:
-                            raw_pitch = float(parts[1].split(":")[1])
-                            system.process_serial_data(raw_roll, raw_pitch)
-                        else:
-                            if abs(raw_roll) > 0.0001:
-                                roll_buffer.append(raw_roll)
-                            filtered_roll = median(roll_buffer)
-
-                            if selected_mode == "CRANE":
-                                setpoint_x = max(-1.8, min(1.8, (filtered_roll / 45.0) * 1.8))
-                            elif selected_mode == "FURUTA":
-                                system.set_target_angle(math.radians(filtered_roll))
-                            elif selected_mode == "SATELLITE":
-                                system.setpoint_angle = math.radians(filtered_roll)
-            except Exception:
-                pass
+        # Odczyt przefiltrowanych danych z IMUReader
+        if imu is not None and imu.is_connected():
+            raw_roll, raw_pitch = imu.get_orientation()
+            if selected_mode in ("QUADROCOPTER", "BALL_AND_PLATE"):
+                if hasattr(system, "process_serial_data"):
+                    system.process_serial_data(raw_roll, raw_pitch)
+            elif selected_mode == "CRANE":
+                setpoint_x = max(-1.8, min(1.8, (raw_roll / 45.0) * 1.8))
+            elif selected_mode == "FURUTA":
+                if hasattr(system, "set_target_angle"):
+                    system.set_target_angle(math.radians(raw_roll))
+            elif selected_mode == "SATELLITE":
+                system.setpoint_angle = math.radians(raw_roll)
 
         if dt > 0:
             if selected_mode == "CRANE":
@@ -244,7 +232,7 @@ def run_simulation(selected_mode, screen, clock, font_small, ser):
             glLightfv(GL_LIGHT0, GL_AMBIENT, [0.25, 0.25, 0.3, 1.0])
             gluLookAt(0.0, -3.2, 2.6, 0.0, 0.0, 0.6, 0.0, 0.0, 1.0)
             draw_grid()
-            system.render_3d()
+            (system.render_3d() if hasattr(system, "render_3d") else system.draw_3d())
 
         # Rysowanie Panelu Bocznego
         gui_surface.fill(config.COLOR_BG)
@@ -423,17 +411,18 @@ def main():
     clock = pygame.time.Clock()
     font_small = pygame.font.SysFont("Segoe UI", 12)
 
-    ser = serial_handler.init_serial()
+    imu = IMUReader()
 
-    while True:
-        selected_mode = show_selection_menu(screen, clock)
-        result = run_simulation(selected_mode, screen, clock, font_small, ser)
+    try:
+        while True:
+            selected_mode = show_selection_menu(screen, clock)
+            result = run_simulation(selected_mode, screen, clock, font_small, imu)
 
-        if result == "QUIT":
-            break
-
-    serial_handler.close_serial()
-    pygame.quit()
+            if result == "QUIT":
+                break
+    finally:
+        imu.close()
+        pygame.quit()
 
 
 if __name__ == "__main__":

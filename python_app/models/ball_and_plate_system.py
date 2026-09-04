@@ -2,11 +2,12 @@ import math
 import numpy as np
 from collections import deque
 from statistics import median
-from OpenGL.GL import *
-from OpenGL.GLU import *
+from models.base_system import BaseSystem
+from ui.renderer_3d import draw_ball_and_plate_scene
 
-class BallAndPlateSystem:
+class BallAndPlateSystem(BaseSystem):
     def __init__(self, config):
+        super().__init__()
         self.config = config
         
         # Pobieranie parametrów z konfiguracji
@@ -35,17 +36,14 @@ class BallAndPlateSystem:
         self.plate_roll = 0.0
         self.plate_pitch = 0.0
 
-        # FILTR MEDIANOWY dla odczytów z IMU (okno 5 próbek)
+        # FILTR MEDIANOWY dla odczytów z IMU
         self.roll_buffer = deque([0.0] * 5, maxlen=5)
         self.pitch_buffer = deque([0.0] * 5, maxlen=5)
 
-        # Tryb sterowania: 
-        # True  -> IMU steruje pozycją celu (Setpoint), PID pilnuje kulki
-        # False -> IMU bezpośrednio przechyla płytkę
         self.use_imu_as_setpoint = True
         self.imu_sensitivity = 25.0
 
-        # Kontroler PID (Prosty PD dla X i Y)
+        # Kontroler PID (PD)
         class PID:
             def __init__(self, Kp, Kd):
                 self.Kp = Kp
@@ -86,11 +84,9 @@ class BallAndPlateSystem:
         self.pitch_buffer.extend([0.0] * 5)
 
     def reset(self):
-        """Wymagane przez klasę bazową"""
         self.reset_state()
 
     def set_target_from_input(self, norm_x, norm_y=0.5):
-        """Przeliczanie pozycji z interfejsu na cel w metrach"""
         limit_pos = self.plate_size - self.ball_radius
         self.setpoint_x = (norm_x - 0.5) * (limit_pos * 2)
         self.setpoint_y = (norm_y - 0.5) * (limit_pos * 2)
@@ -113,7 +109,6 @@ class BallAndPlateSystem:
         }
 
     def process_serial_data(self, roll, pitch):
-        """Obsługa odczytów z IMU z użyciem filtru medianowego"""
         self.roll_buffer.append(roll)
         self.pitch_buffer.append(pitch)
 
@@ -129,7 +124,6 @@ class BallAndPlateSystem:
             self.plate_pitch = max(-20.0, min(20.0, filtered_pitch))
 
     def step(self, dt):
-        """Krok symulacji fizycznej i pętli sterowania"""
         if dt <= 0.0001:
             return self.plate_roll, self.plate_pitch
 
@@ -141,20 +135,18 @@ class BallAndPlateSystem:
             self.plate_pitch = max(-18.0, min(18.0, target_pitch))
             self.plate_roll = max(-18.0, min(18.0, target_roll))
 
-        # 2. FIZYKA KULKI (Staczanie po pochyłości)
+        # 2. FIZYKA KULKI
         rad_pitch = math.radians(self.plate_pitch)
         rad_roll = math.radians(self.plate_roll)
 
         ax = -(5.0 / 7.0) * self.g * math.sin(rad_pitch) - self.damping * self.ball_vel[0]
         ay = (5.0 / 7.0) * self.g * math.sin(rad_roll) - self.damping * self.ball_vel[1]
 
-        # Całkowanie stanu fizycznego
         self.ball_vel[0] += ax * dt
         self.ball_vel[1] += ay * dt
         self.ball_pos[0] += self.ball_vel[0] * dt
         self.ball_pos[1] += self.ball_vel[1] * dt
 
-        # Ograniczenia i odbicia od krawędzi płytki
         limit = self.plate_size - self.ball_radius
         for i in range(2):
             if abs(self.ball_pos[i]) > limit:
@@ -164,76 +156,8 @@ class BallAndPlateSystem:
         return self.plate_roll, self.plate_pitch
 
     def render_3d(self):
-        self.draw_3d()
+        """Przekierowanie rysowania do zewnętrznego renderera."""
+        draw_ball_and_plate_scene(self)
 
     def draw_3d(self):
-        glPushMatrix()
-        
-        # UNIESIENIE PLATFORMY NAD PODŁOŻE
-        glTranslatef(0.0, 0.0, self.elevation)
-
-        # ODKSZTAŁCENIE / NACHYLENIE PLATFORMY W OPENGL
-        glRotatef(-self.plate_pitch, 0.0, 1.0, 0.0)
-        glRotatef(-self.plate_roll, 1.0, 0.0, 0.0)
-
-        hx = hy = self.plate_size
-        hz = self.plate_thickness / 2.0
-
-        # 1. Rysowanie płytki - Ciemnoniebieskie wypełnienie
-        glColor3f(0.08, 0.15, 0.25)
-        glBegin(GL_QUADS)
-        # Górna powierzchnia
-        glNormal3f(0.0, 0.0, 1.0)
-        glVertex3f(-hx, -hy, hz); glVertex3f(hx, -hy, hz); glVertex3f(hx, hy, hz); glVertex3f(-hx, hy, hz)
-        # Dolna powierzchnia
-        glNormal3f(0.0, 0.0, -1.0)
-        glVertex3f(-hx, -hy, -hz); glVertex3f(-hx, hy, -hz); glVertex3f(hx, hy, -hz); glVertex3f(hx, -hy, -hz)
-        # Boki
-        glNormal3f(0.0, 1.0, 0.0)
-        glVertex3f(-hx, hy, -hz); glVertex3f(-hx, hy, hz); glVertex3f(hx, hy, hz); glVertex3f(hx, hy, -hz)
-        glNormal3f(0.0, -1.0, 0.0)
-        glVertex3f(-hx, -hy, -hz); glVertex3f(hx, -hy, -hz); glVertex3f(hx, -hy, hz); glVertex3f(-hx, -hy, hz)
-        glNormal3f(1.0, 0.0, 0.0)
-        glVertex3f(hx, -hy, -hz); glVertex3f(hx, hy, -hz); glVertex3f(hx, hy, hz); glVertex3f(hx, -hy, hz)
-        glNormal3f(-1.0, 0.0, 0.0)
-        glVertex3f(-hx, -hy, -hz); glVertex3f(-hx, -hy, hz); glVertex3f(-hx, hy, hz); glVertex3f(-hx, hy, -hz)
-        glEnd()
-
-        # Obramowanie płytki - Jasnoszary / Srebrny brzeg
-        glLineWidth(3.0)
-        glColor3f(0.7, 0.8, 0.9)
-        glBegin(GL_LINE_LOOP)
-        glVertex3f(-hx, -hy, hz + 0.001)
-        glVertex3f(hx, -hy, hz + 0.001)
-        glVertex3f(hx, hy, hz + 0.001)
-        glVertex3f(-hx, hy, hz + 0.001)
-        glEnd()
-
-        # 2. Cel (Setpoint) - Zielony pierścień / Okrąg
-        glPushMatrix()
-        glTranslatef(self.setpoint_x, self.setpoint_y, hz + 0.002)
-        glColor3f(0.0, 1.0, 0.4)
-        glLineWidth(3.5)
-        
-        segments = 32
-        radius = 0.08
-        glBegin(GL_LINE_LOOP)
-        for i in range(segments):
-            angle = 2.0 * math.pi * i / segments
-            rx = radius * math.cos(angle)
-            ry = radius * math.sin(angle)
-            glVertex3f(rx, ry, 0.0)
-        glEnd()
-        glPopMatrix()
-
-        # 3. Kula (Ball) - Czerwona sfera na powierzchni
-        glPushMatrix()
-        glTranslatef(self.ball_pos[0], self.ball_pos[1], hz + self.ball_radius)
-        glColor3f(0.95, 0.2, 0.2)
-        quad_ball = gluNewQuadric()
-        gluQuadricNormals(quad_ball, GLU_SMOOTH)
-        gluSphere(quad_ball, self.ball_radius, 24, 24)
-        gluDeleteQuadric(quad_ball)
-        glPopMatrix()
-
-        glPopMatrix()
+        self.render_3d()
