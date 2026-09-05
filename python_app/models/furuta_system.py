@@ -103,7 +103,6 @@ class LQRController:
         self.active = True
         err_th1 = angle_difference(th1, setpoint_arm)
 
-        # Prawo sterowania LQR z Twojego oryginalnego kodu:
         u = -(self.K[0] * err_th1 + 
               self.K[1] * om1 + 
               self.K[2] * th2 + 
@@ -114,35 +113,57 @@ class LQRController:
 
 class FurutaSystem(BaseSystem):
     def __init__(self):
+        super().__init__()
         self.physics = FurutaPendulumPhysics()
         self.controller = LQRController(self.physics)
         self.setpoint_arm = 0.0
 
-    
+        # Dodatkowe pola dla poprawnego odczytu statusu w rendererze
+        self.status_text = ""
+        self.status_color = (0, 255, 100)
+
         self.sliders = [
-            Slider(20, 35, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[0], "K_theta1 (Ramie pos)", step=0.1),
-            Slider(20, 70, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[1], "K_omega1 (Ramie vel)", step=0.1),
-            Slider(20, 105, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[2], "K_theta2 (Wahadlo pos)", step=0.1),
-            Slider(20, 140, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[3], "K_omega2 (Wahadlo vel)", step=0.1),
+            Slider(20, 40, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[0], "K_theta1 (Ramie pos)", step=0.1),
+            Slider(20, 75, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[1], "K_omega1 (Ramie vel)", step=0.1),
+            Slider(20, 110, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[2], "K_theta2 (Wahadlo pos)", step=0.1),
+            Slider(20, 145, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[3], "K_omega2 (Wahadlo vel)", step=0.1),
         ]
 
-        
-        self.btn_reset = Button(20, 175, 200, 26, "RESET DO GÓRY (SPACE)")
+        self.btn_reset = Button(20, 180, 200, 24, "RESET DO GÓRY (SPACE)")
 
         self.MAX_HIST = 150
         self.hist_pend = deque(maxlen=self.MAX_HIST)
         self.hist_arm = deque(maxlen=self.MAX_HIST)
         self.hist_sp = deque(maxlen=self.MAX_HIST)
+        self.hist_u = deque(maxlen=self.MAX_HIST)  # Bufor dla momentu sterującego
 
-    def reset(self):
+        self.update_status()
+
+    def update_status(self):
+        """Aktualizuje atrybuty statusu wewnętrznego."""
+        self.status_text = f"LQR: {'AKTYWNY' if self.controller.active else 'UPADEK (SPACJA)'} | Arm: {math.degrees(self.physics.theta1):.1f}°"
+        self.status_color = (80, 230, 120) if self.controller.active else (230, 80, 80)
+
+    def reset_state(self):
         self.setpoint_arm = 0.0
         self.physics.reset()
+        self.hist_pend.clear()
+        self.hist_arm.clear()
+        self.hist_sp.clear()
+        self.hist_u.clear()  # Czyszczenie bufora sterowania
+        self.update_status()
 
-    def set_target_from_input(self, norm_x):
+    def reset(self):
+        self.reset_state()
+
+    def set_target_from_input(self, norm_x, norm_y=0.5):
         self.setpoint_arm = normalize_angle((norm_x - 0.5) * math.pi * 2.0)
 
     def set_target_angle(self, angle_rad):
         self.setpoint_arm = normalize_angle(angle_rad)
+
+    def process_serial_data(self, roll, pitch):
+        self.setpoint_arm = normalize_angle(math.radians(roll))
 
     def step(self, dt):
         for i in range(4):
@@ -154,20 +175,29 @@ class FurutaSystem(BaseSystem):
         self.hist_pend.append(math.degrees(self.physics.theta2))
         self.hist_arm.append(math.degrees(self.physics.theta1))
         self.hist_sp.append(math.degrees(self.setpoint_arm))
+        self.hist_u.append(torque)  # Rejestracja sygnału sterującego
+
+        self.update_status()
 
     def draw_3d(self):
         draw_furuta_3d(self.physics, self.setpoint_arm)
+
+    def render_3d(self):
+        self.draw_3d()
 
     def get_widgets(self):
         return self.sliders + [self.btn_reset]
 
     def get_charts_data(self):
         return {
-            "pendulum_chart": [{"data": list(self.hist_pend), "color": (100, 200, 255)}],
             "arm_chart": [
                 {"data": list(self.hist_sp), "color": (80, 220, 120)},
                 {"data": list(self.hist_arm), "color": (255, 200, 80)},
             ],
-            "status_text": "LQR: AKTYWNY" if self.controller.active else "LQR: UPADEK (SPACJA)",
-            "status_color": (80, 230, 120) if self.controller.active else (230, 80, 80),
+            "pendulum_chart": [
+                {"data": list(self.hist_pend), "color": (100, 200, 255)}
+            ],
+            "u_chart": [
+                {"data": list(self.hist_u), "color": (255, 180, 80)}
+            ]
         }

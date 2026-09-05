@@ -23,3 +23,6 @@ __pycache__/
 # Ustawienia systemowe
 .DS_Store
 Thumbs.db
+
+python_app/build/
+python_app/dist/

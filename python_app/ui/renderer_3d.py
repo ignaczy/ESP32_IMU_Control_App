@@ -223,8 +223,8 @@ def draw_quadrocopter_scene(drone):
     phi = getattr(drone, 'phi', 0.0)
     theta = getattr(drone, 'theta', 0.0)
 
-    glRotatef(math.degrees(phi), 1, 0, 0)
-    glRotatef(math.degrees(-theta), 0, 1, 0)
+    glRotatef(math.degrees(phi), 0, 1, 0)
+    glRotatef(math.degrees(-theta), 1, 0, 0)
 
     # Korpus główny
     glPushMatrix()

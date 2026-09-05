@@ -34,6 +34,8 @@ COLOR_BTN_RESET_HOVER = (220, 70, 70)
 SLIDER_MIN_VAL = -10.0
 SLIDER_MAX_VAL = 10.0
 
+IMU_MEDIAN_WINDOW_SIZE = 5
+
 # --- Parametry Suwnicy (Crane) ---
 CRANE_PARAMS = {
     "m_cart": 2.0,     # Masa wózka [kg]

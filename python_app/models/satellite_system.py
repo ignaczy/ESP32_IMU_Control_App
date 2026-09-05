@@ -2,6 +2,7 @@ import math
 from collections import deque
 from models.base_system import BaseSystem
 from ui.renderer_3d import draw_satellite_scene
+from ui.widgets import Button, Slider
 
 
 def angle_difference(target, current):
@@ -41,31 +42,23 @@ class SatelliteSystem(BaseSystem):
         super().__init__()
         self.config = config
 
-        # Pobieranie słownika SATELLITE_CONFIG lub zmiennych bezpośrednich z obiektu config
         sat_cfg = getattr(config, 'SATELLITE_CONFIG', {}) if config else {}
 
-        # Parametry fizyczne
         self.I_sat = sat_cfg.get("I_sat", getattr(config, 'I_SAT', 2.5))
         self.I_wheel = sat_cfg.get("I_wheel", getattr(config, 'I_WHEEL', 0.3))
         self.max_wheel_speed = sat_cfg.get("max_wheel_speed", getattr(config, 'MAX_WHEEL_SPEED', 100.0))
         
-        # Nastawy regulatora PID
         kp = sat_cfg.get("Kp_default", getattr(config, 'SATELLITE_KP_DEFAULT', 10.0))
         ki = sat_cfg.get("Ki_default", getattr(config, 'SATELLITE_KI_DEFAULT', 0.0))
         kd = sat_cfg.get("Kd_default", getattr(config, 'SATELLITE_KD_DEFAULT', 12.0))
         max_torque = sat_cfg.get("max_torque", getattr(config, 'SATELLITE_MAX_TORQUE', 25.0))
         integral_limit = sat_cfg.get("integral_limit", getattr(config, 'SATELLITE_INTEGRAL_LIMIT', 5.0))
 
-        # Inicjalizacja regulatora PID
         self.pid = SatellitePID(
-            Kp=kp,
-            Ki=ki,
-            Kd=kd,
-            max_torque=max_torque,
-            integral_limit=integral_limit
+            Kp=kp, Ki=ki, Kd=kd,
+            max_torque=max_torque, integral_limit=integral_limit
         )
 
-        # Stan dynamiczny
         self.angle_sat = 0.0
         self.omega_sat = 0.0
         self.angle_wheel = 0.0
@@ -74,11 +67,30 @@ class SatelliteSystem(BaseSystem):
         self.setpoint_angle = 0.0
         self.current_torque = 0.0
 
-        # Historia dla wykresów
+        # Status wewnętrzny
+        self.status_text = ""
+        self.status_color = (0, 255, 100)
+
         self.max_hist = 150
         self.hist_sp = deque([0.0] * self.max_hist, maxlen=self.max_hist)
         self.hist_pv = deque([0.0] * self.max_hist, maxlen=self.max_hist)
         self.hist_wheel_speed = deque([0.0] * self.max_hist, maxlen=self.max_hist)
+        self.hist_u = deque([0.0] * self.max_hist, maxlen=self.max_hist)  # Bufor momentu sterującego
+
+        # Inicjalizacja Widgetów
+        self.slider_kp = Slider(20, 45, 220, 12, 0.0, 40.0, self.pid.Kp, "Kp")
+        self.slider_kd = Slider(20, 85, 220, 12, 0.0, 30.0, self.pid.Kd, "Kd")
+        self.btn_reset = Button(20, 115, 220, 25, "RESET STANU (SPACE)")
+
+        self.update_status()
+
+    def update_status(self):
+        """Aktualizuje atrybuty statusu."""
+        self.status_text = f"Kat Satelity: {math.degrees(self.angle_sat):.1f} deg | Kola: {self.omega_wheel:.1f} rad/s"
+        self.status_color = (0, 255, 100)
+
+    def reset_state(self):
+        self.reset()
 
     def reset(self):
         self.angle_sat = 0.0
@@ -91,12 +103,14 @@ class SatelliteSystem(BaseSystem):
         self.hist_sp.clear()
         self.hist_pv.clear()
         self.hist_wheel_speed.clear()
+        self.hist_u.clear()
         self.hist_sp.extend([0.0] * self.max_hist)
         self.hist_pv.extend([0.0] * self.max_hist)
         self.hist_wheel_speed.extend([0.0] * self.max_hist)
+        self.hist_u.extend([0.0] * self.max_hist)
+        self.update_status()
 
     def update_params(self, Kp, Kd, Ki=0.0):
-        """Metoda umożliwiająca dynamiczną zmianę nastaw PID w trakcie działania (np. suwakami w Interfejsie)."""
         self.pid.Kp = Kp
         self.pid.Kd = Kd
         self.pid.Ki = Ki
@@ -110,6 +124,9 @@ class SatelliteSystem(BaseSystem):
     def step(self, dt):
         if dt <= 0.0001:
             return
+
+        # Aktualizacja parametrów regulatora z suwaków
+        self.update_params(self.slider_kp.val, self.slider_kd.val)
 
         self.current_torque = self.pid.compute(self.setpoint_angle, self.angle_sat, self.omega_sat, dt)
         torque = self.current_torque
@@ -136,21 +153,25 @@ class SatelliteSystem(BaseSystem):
         self.hist_sp.append(math.degrees(self.setpoint_angle))
         self.hist_pv.append(math.degrees(self.angle_sat))
         self.hist_wheel_speed.append(self.omega_wheel)
+        self.hist_u.append(self.current_torque)  # Rejestracja momentu sterującego
+
+        self.update_status()
 
     def get_widgets(self):
-        return []
+        return [self.slider_kp, self.slider_kd, self.btn_reset]
 
     def get_charts_data(self):
         return {
-            "pendulum_chart": [
+            "satellite_chart": [
                 {"data": list(self.hist_sp), "color": (80, 220, 120)},
-                {"data": list(self.hist_pv), "color": (100, 200, 255)}
+                {"data": list(self.hist_pv), "color": (255, 180, 50)}
             ],
-            "arm_chart": [
-                {"data": list(self.hist_wheel_speed), "color": (255, 180, 80)}
+            "wheel_chart": [
+                {"data": list(self.hist_wheel_speed), "color": (100, 200, 255)}
             ],
-            "status_text": f"Kat Satelity: {math.degrees(self.angle_sat):.1f} deg | Kola: {self.omega_wheel:.1f} rad/s",
-            "status_color": (230, 235, 245)
+            "u_chart": [
+                {"data": list(self.hist_u), "color": (255, 180, 80)}
+            ]
         }
 
     def render_3d(self):

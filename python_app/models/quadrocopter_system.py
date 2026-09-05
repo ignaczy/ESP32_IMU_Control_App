@@ -1,19 +1,9 @@
 import math
+import numpy as np
 from collections import deque
-from statistics import median
 from models.base_system import BaseSystem
 from ui.renderer_3d import draw_quadrocopter_scene
-
-
-class MedianFilter:
-    def __init__(self, window_size=5):
-        self.buffer_roll = deque(maxlen=window_size)
-        self.buffer_pitch = deque(maxlen=window_size)
-
-    def filter(self, raw_roll, raw_pitch):
-        self.buffer_roll.append(raw_roll)
-        self.buffer_pitch.append(raw_pitch)
-        return median(self.buffer_roll), median(self.buffer_pitch)
+from ui.widgets import Button, Slider
 
 
 class SafePID:
@@ -51,25 +41,44 @@ class QuadrocopterSystem(BaseSystem):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        
-        # Pobieranie parametrów ze słowników lub zmiennych z config.py
+
+        # Pobieranie parametrów z konfiguracji
         quad_params = getattr(config, 'QUAD_PARAMS', {})
         pid_config = getattr(config, 'PID_QUAD_CONFIG', {})
 
         self.arm_len = quad_params.get("arm_len", getattr(config, 'QUAD_ARM_LEN', 0.25))
-        window_size = quad_params.get("filter_window", getattr(config, 'QUAD_FILTER_WINDOW', 5))
-        
         self.g = 9.81
-        self.median_filter = MedianFilter(window_size=window_size)
-        
-        kp = pid_config.get("Kp_default", getattr(config, 'QUAD_KP_DEFAULT', 10.0))
-        ki = pid_config.get("Ki_default", getattr(config, 'QUAD_KI_DEFAULT', 0.0))
-        kd = pid_config.get("Kd_default", getattr(config, 'QUAD_KD_DEFAULT', 2.0))
-        limit = pid_config.get("limit_default", getattr(config, 'QUAD_PID_LIMIT', 15.0))
 
-        self.pid_x = SafePID(Kp=kp, Ki=ki, Kd=kd, limit=limit)
-        self.pid_y = SafePID(Kp=kp, Ki=ki, Kd=kd, limit=limit)
+        self.Kp = pid_config.get("Kp_default", getattr(config, 'QUAD_KP_DEFAULT', 10.0))
+        self.Ki = pid_config.get("Ki_default", getattr(config, 'QUAD_KI_DEFAULT', 0.0))
+        self.Kd = pid_config.get("Kd_default", getattr(config, 'QUAD_KD_DEFAULT', 2.0))
+        self.pid_limit = pid_config.get("limit_default", getattr(config, 'QUAD_PID_LIMIT', 15.0))
+
+        self.pid_x = SafePID(Kp=self.Kp, Ki=self.Ki, Kd=self.Kd, limit=self.pid_limit)
+        self.pid_y = SafePID(Kp=self.Kp, Ki=self.Ki, Kd=self.Kd, limit=self.pid_limit)
+
+        # WIDGETY UI
+        self.slider_kp = Slider(20, 45, 220, 12, 0.0, 20.0, self.Kp, "Kp")
+        self.slider_kd = Slider(20, 85, 220, 12, 0.0, 10.0, self.Kd, "Kd")
+        self.btn_reset = Button(20, 115, 220, 25, "RESET STANU (SPACE)")
+
+        # ATRYBUTY STATUSU
+        self.status_text = "QUADROCOPTER ACTIVE"
+        self.status_color = (0, 255, 100)
+
+        # BUFORY HISTORII DLA WYKRESÓW
+        self.MAX_HIST = 150
+        self.hist_sp_x = deque(maxlen=self.MAX_HIST)
+        self.hist_pv_x = deque(maxlen=self.MAX_HIST)
+        self.hist_sp_y = deque(maxlen=self.MAX_HIST)
+        self.hist_pv_y = deque(maxlen=self.MAX_HIST)
+        self.hist_roll = deque(maxlen=self.MAX_HIST)
+        self.hist_pitch = deque(maxlen=self.MAX_HIST)
         
+        # Bufory sygnałów sterujących (zadanych kątów wychylenia z regulatora PID)
+        self.hist_u_roll = deque(maxlen=self.MAX_HIST)
+        self.hist_u_pitch = deque(maxlen=self.MAX_HIST)
+
         self.setpoint_x = 0.0
         self.setpoint_y = 0.0
         self.reset_state()
@@ -80,25 +89,66 @@ class QuadrocopterSystem(BaseSystem):
         self.phi = 0.0
         self.theta = 0.0
         self.prop_angle = 0.0
+        self.setpoint_x = 0.0
+        self.setpoint_y = 0.0
+
         self.pid_x.reset()
         self.pid_y.reset()
 
+        self.hist_sp_x.clear()
+        self.hist_pv_x.clear()
+        self.hist_sp_y.clear()
+        self.hist_pv_y.clear()
+        self.hist_roll.clear()
+        self.hist_pitch.clear()
+        self.hist_u_roll.clear()
+        self.hist_u_pitch.clear()
+
+        # Wypełnienie domyślnymi zerami
+        self.hist_sp_x.extend([0.0] * self.MAX_HIST)
+        self.hist_pv_x.extend([0.0] * self.MAX_HIST)
+        self.hist_sp_y.extend([0.0] * self.MAX_HIST)
+        self.hist_pv_y.extend([0.0] * self.MAX_HIST)
+        self.hist_roll.extend([0.0] * self.MAX_HIST)
+        self.hist_pitch.extend([0.0] * self.MAX_HIST)
+        self.hist_u_roll.extend([0.0] * self.MAX_HIST)
+        self.hist_u_pitch.extend([0.0] * self.MAX_HIST)
+
+        self.update_status()
+
+    def reset(self):
+        self.reset_state()
+
     def update_params(self, Kp, Kd, Ki=0.0):
+        self.Kp = Kp
+        self.Kd = Kd
+        self.Ki = Ki
         self.pid_x.Kp = self.pid_y.Kp = Kp
         self.pid_x.Kd = self.pid_y.Kd = Kd
         self.pid_x.Ki = self.pid_y.Ki = Ki
 
-    def process_serial_data(self, raw_roll, raw_pitch):
-        filt_roll, filt_pitch = self.median_filter.filter(raw_roll, raw_pitch)
-        self.setpoint_x = max(-2.0, min(2.0, (filt_roll / 45.0) * 2.0))
-        self.setpoint_y = max(-2.0, min(2.0, (filt_pitch / 45.0) * 2.0))
+    def update_status(self):
+        """Aktualizuje atrybuty tekstu statusu."""
+        self.status_text = f"QUADROCOPTER ACTIVE | Pos: X={self.pos[0]:.2f}m, Y={self.pos[1]:.2f}m"
+        self.status_color = (0, 255, 100)
+
+    def set_target_from_input(self, norm_x, norm_y=0.5):
+        self.setpoint_x = (norm_x - 0.5) * 4.0
+        self.setpoint_y = (norm_y - 0.5) * 4.0
+
+    def process_serial_data(self, roll, pitch):
+        self.setpoint_x = max(-2.0, min(2.0, (roll / 45.0) * 2.0))
+        self.setpoint_y = max(-2.0, min(2.0, (pitch / 45.0) * 2.0))
 
     def step(self, dt):
-        if dt <= 0.0001:
-            return
+        self.update_params(self.slider_kp.val, self.slider_kd.val, self.Ki)
 
+        if dt <= 0.0001:
+            return math.degrees(self.phi), math.degrees(self.theta)
+
+        # Wyliczenie sygnałów sterujących (zadanych kątów przechylenia/pochylenia)
         target_roll = self.pid_x.update(self.setpoint_x, self.pos[0], dt)
-        target_pitch = -self.pid_y.update(self.setpoint_y, self.pos[1], dt)
+        target_pitch = self.pid_y.update(self.setpoint_y, self.pos[1], dt)
 
         target_phi = math.radians(target_roll)
         target_theta = math.radians(target_pitch)
@@ -106,8 +156,8 @@ class QuadrocopterSystem(BaseSystem):
         self.phi += (target_phi - self.phi) * (dt / (0.04 + dt))
         self.theta += (target_theta - self.theta) * (dt / (0.04 + dt))
 
-        ax = self.g * math.tan(self.phi) - 3.0 * self.vel[0]
-        ay = -self.g * math.tan(self.theta) - 3.0 * self.vel[1]
+        ax = self.g * math.sin(self.phi) - 3.0 * self.vel[0]
+        ay = self.g * math.sin(self.theta) - 3.0 * self.vel[1]
 
         self.vel[0] += ax * dt
         self.vel[1] += ay * dt
@@ -116,29 +166,48 @@ class QuadrocopterSystem(BaseSystem):
         self.pos[1] += self.vel[1] * dt
 
         self.prop_angle = (self.prop_angle + 1200 * dt) % 360
-        
+
+        # Aktualizacja historii
+        self.hist_sp_x.append(self.setpoint_x)
+        self.hist_pv_x.append(self.pos[0])
+        self.hist_sp_y.append(self.setpoint_y)
+        self.hist_pv_y.append(self.pos[1])
+        self.hist_roll.append(math.degrees(self.phi))
+        self.hist_pitch.append(math.degrees(self.theta))
+        self.hist_u_roll.append(target_roll)
+        self.hist_u_pitch.append(target_pitch)
+
+        self.update_status()
+
         return target_roll, target_pitch
+
+    def get_widgets(self):
+        return [self.slider_kp, self.slider_kd, self.btn_reset]
+
+    def get_charts_data(self):
+        return {
+            "pos_x_chart": [
+                {"data": list(self.hist_sp_x), "color": (80, 220, 120)},
+                {"data": list(self.hist_pv_x), "color": (100, 200, 255)},
+            ],
+            "pos_y_chart": [
+                {"data": list(self.hist_sp_y), "color": (80, 220, 120)},
+                {"data": list(self.hist_pv_y), "color": (200, 100, 255)},
+            ],
+            "angles_chart": [
+                {"data": list(self.hist_roll), "color": (255, 90, 90)},
+                {"data": list(self.hist_pitch), "color": (180, 130, 255)},
+            ],
+            "u_chart": [
+                {"data": list(self.hist_u_roll), "color": (255, 140, 0)},
+                {"data": list(self.hist_u_pitch), "color": (0, 220, 220)},
+            ],
+            "status_text": self.status_text,
+            "status_color": self.status_color,
+        }
 
     def draw_3d(self):
         draw_quadrocopter_scene(self)
 
     def render_3d(self):
-        """Alias dla draw_3d zapewniający zgodność z pętlą główną main.py."""
         self.draw_3d()
-
-    def reset(self):
-        self.reset_state()
-
-    def set_target_from_input(self, norm_x):
-        self.setpoint_x = (norm_x - 0.5) * 4.0
-
-    def get_widgets(self):
-        return []
-
-    def get_charts_data(self):
-        return {
-            "pendulum_chart": [],
-            "arm_chart": [],
-            "status_text": f"Pos: X={self.pos[0]:.2f}m, Y={self.pos[1]:.2f}m",
-            "status_color": (0, 255, 100)
-        }
