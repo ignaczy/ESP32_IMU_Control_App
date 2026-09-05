@@ -1,5 +1,3 @@
-# models/crane_system.py
-
 import math
 import config
 

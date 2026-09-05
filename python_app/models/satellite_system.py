@@ -13,11 +13,12 @@ def normalize_angle(angle):
 
 
 class SatellitePID:
-    def __init__(self, Kp=10.0, Ki=0.0, Kd=12.0, max_torque=25.0):
+    def __init__(self, Kp=10.0, Ki=0.0, Kd=12.0, max_torque=25.0, integral_limit=5.0):
         self.Kp = Kp
         self.Ki = Ki
         self.Kd = Kd
         self.max_torque = max_torque
+        self.integral_limit = integral_limit
         self.reset()
 
     def reset(self):
@@ -29,31 +30,51 @@ class SatellitePID:
 
         error = angle_difference(setpoint_angle, sat_angle)
         self.integral += error * dt
-        self.integral = max(-5.0, min(5.0, self.integral))
+        self.integral = max(-self.integral_limit, min(self.integral_limit, self.integral))
 
         output = (self.Kp * error) + (self.Ki * self.integral) - (self.Kd * sat_omega)
         return max(-self.max_torque, min(self.max_torque, output))
 
 
 class SatelliteSystem(BaseSystem):
-    def __init__(self):
+    def __init__(self, config=None):
         super().__init__()
-        # Parametry fizyczne
-        self.I_sat = 2.5        # Moment bezwładności kadłuba [kg*m^2]
-        self.I_wheel = 0.3      # Moment bezwładności koła zamachowego [kg*m^2]
-        self.max_wheel_speed = 300.0
+        self.config = config
 
-        # Stan
+        # Pobieranie słownika SATELLITE_CONFIG lub zmiennych bezpośrednich z obiektu config
+        sat_cfg = getattr(config, 'SATELLITE_CONFIG', {}) if config else {}
+
+        # Parametry fizyczne
+        self.I_sat = sat_cfg.get("I_sat", getattr(config, 'I_SAT', 2.5))
+        self.I_wheel = sat_cfg.get("I_wheel", getattr(config, 'I_WHEEL', 0.3))
+        self.max_wheel_speed = sat_cfg.get("max_wheel_speed", getattr(config, 'MAX_WHEEL_SPEED', 100.0))
+        
+        # Nastawy regulatora PID
+        kp = sat_cfg.get("Kp_default", getattr(config, 'SATELLITE_KP_DEFAULT', 10.0))
+        ki = sat_cfg.get("Ki_default", getattr(config, 'SATELLITE_KI_DEFAULT', 0.0))
+        kd = sat_cfg.get("Kd_default", getattr(config, 'SATELLITE_KD_DEFAULT', 12.0))
+        max_torque = sat_cfg.get("max_torque", getattr(config, 'SATELLITE_MAX_TORQUE', 25.0))
+        integral_limit = sat_cfg.get("integral_limit", getattr(config, 'SATELLITE_INTEGRAL_LIMIT', 5.0))
+
+        # Inicjalizacja regulatora PID
+        self.pid = SatellitePID(
+            Kp=kp,
+            Ki=ki,
+            Kd=kd,
+            max_torque=max_torque,
+            integral_limit=integral_limit
+        )
+
+        # Stan dynamiczny
         self.angle_sat = 0.0
         self.omega_sat = 0.0
         self.angle_wheel = 0.0
         self.omega_wheel = 0.0
 
         self.setpoint_angle = 0.0
-        self.pid = SatellitePID(Kp=10.0, Ki=0.0, Kd=12.0, max_torque=25.0)
         self.current_torque = 0.0
 
-        # Historia
+        # Historia dla wykresów
         self.max_hist = 150
         self.hist_sp = deque([0.0] * self.max_hist, maxlen=self.max_hist)
         self.hist_pv = deque([0.0] * self.max_hist, maxlen=self.max_hist)
@@ -73,6 +94,12 @@ class SatelliteSystem(BaseSystem):
         self.hist_sp.extend([0.0] * self.max_hist)
         self.hist_pv.extend([0.0] * self.max_hist)
         self.hist_wheel_speed.extend([0.0] * self.max_hist)
+
+    def update_params(self, Kp, Kd, Ki=0.0):
+        """Metoda umożliwiająca dynamiczną zmianę nastaw PID w trakcie działania (np. suwakami w Interfejsie)."""
+        self.pid.Kp = Kp
+        self.pid.Kd = Kd
+        self.pid.Ki = Ki
 
     def set_target_from_input(self, norm_x, norm_y=0.5):
         self.setpoint_angle = normalize_angle((norm_x - 0.5) * 2.0 * math.pi)

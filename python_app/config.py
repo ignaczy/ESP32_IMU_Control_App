@@ -107,7 +107,7 @@ PID_BALL_PLATE_CONFIG = {
 SATELLITE_CONFIG = {
     "I_sat": 2.5,                 # Moment bezwładności kadłuba [kg*m^2]
     "I_wheel": 0.3,               # Moment bezwładności koła zamachowego [kg*m^2]
-    "max_wheel_speed": 300.0,     # Limit prędkości obrotowej koła [rad/s]
+    "max_wheel_speed": 100.0,     # Limit prędkości obrotowej koła [rad/s]
     "max_torque": 25.0,           # Maksymalny moment obrotowy [Nm]
     "Kp_default": 10.0,
     "Ki_default": 0.0,

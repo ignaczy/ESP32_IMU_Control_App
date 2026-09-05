@@ -1,82 +1,9 @@
-# import serial
-# import threading
-# import time
-# from collections import deque
-# from statistics import median
-# import config
-
-
-# class IMUReader:
-#     def __init__(self, port=config.SERIAL_PORT, baudrate=config.BAUD_RATE):
-#         self.port = port
-#         self.baudrate = baudrate
-#         self.ser = None
-#         self.running = False
-#         self.thread = None
-
-#         # Bufor do filtrowania medianowego
-#         self.roll_buffer = deque([0.0] * 5, maxlen=5)
-#         self.latest_roll = 0.0
-
-#         self._connect()
-
-#     def _connect(self):
-#         """Próba połączenia z portem szeregowym."""
-#         try:
-#             self.ser = serial.Serial(self.port, self.baudrate, timeout=config.SERIAL_TIMEOUT)
-#             print(f"[SERIAL] Połączono z {self.port}")
-#             self.running = True
-#             self.thread = threading.Thread(target=self._read_loop, daemon=True)
-#             self.thread.start()
-#         except Exception as e:
-#             print(f"[SERIAL] Brak portu {self.port} (Tryb bez sprzętu IMU): {e}")
-#             self.ser = None
-
-#     def _read_loop(self):
-#         """Pętla wykonywana w osobnym wątku do stałego odczytu portu COM."""
-#         while self.running and self.ser and self.ser.is_open:
-#             try:
-#                 if self.ser.in_waiting:
-#                     raw_data = self.ser.read_all().decode('utf-8', errors='ignore').splitlines()
-#                     if raw_data:
-#                         latest_line = raw_data[-1]
-#                         if "ROLL:" in latest_line:
-#                             parts = latest_line.split(',')
-#                             raw_roll = float(parts[0].split(':')[1])
-                            
-#                             # Ignoruj pojedyncze zerowe błędy odczytu
-#                             if abs(raw_roll) > 0.0001:
-#                                 self.roll_buffer.append(raw_roll)
-#                                 self.latest_roll = median(self.roll_buffer)
-#             except Exception:
-#                 pass
-#             time.sleep(0.005)  # Odpoczynek wątku (odświeżanie 200 Hz)
-
-#     def get_roll(self):
-#         """Zwraca najnowszą, przefiltrowaną wartość ROLL."""
-#         return self.latest_roll
-
-#     def is_connected(self):
-#         """Zwraca True, jeśli port Serial jest aktywny."""
-#         return self.ser is not None and self.ser.is_open
-
-#     def close(self):
-#         """Zamknięcie połączenia i wątku."""
-#         self.running = False
-#         if self.thread and self.thread.is_alive():
-#             self.thread.join(timeout=0.2)
-#         if self.ser and self.ser.is_open:
-#             self.ser.close()
-#             print("[SERIAL] Połączenie zamknięte.")
-
-
 import serial
 import threading
 import time
 from collections import deque
 from statistics import median
 import config
-
 
 class IMUReader:
     def __init__(self, port=config.SERIAL_PORT, baudrate=config.BAUD_RATE):

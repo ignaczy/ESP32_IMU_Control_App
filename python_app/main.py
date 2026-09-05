@@ -336,8 +336,8 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
                 pygame.Rect(10, 330, config.PANEL_WIDTH - 20, 150),
                 font_small,
                 "Predkosc Kola Zamachowego [rad/s]",
-                -300.0,
-                300.0,
+                -config.SATELLITE_CONFIG["max_wheel_speed"],
+                config.SATELLITE_CONFIG["max_wheel_speed"],
                 [{"data": hist_wheel_speed, "color": (100, 200, 255)}],
             )
         else:

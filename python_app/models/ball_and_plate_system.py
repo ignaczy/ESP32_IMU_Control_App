@@ -155,9 +155,6 @@ class BallAndPlateSystem(BaseSystem):
 
         return self.plate_roll, self.plate_pitch
 
-    def render_3d(self):
-        """Przekierowanie rysowania do zewnętrznego renderera."""
+    def draw_3d(self):
         draw_ball_and_plate_scene(self)
 
-    def draw_3d(self):
-        self.render_3d()
