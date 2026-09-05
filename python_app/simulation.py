@@ -7,7 +7,7 @@ from OpenGL.GLU import *
 import config
 from ui.renderer_3d import draw_crane_scene
 from ui.renderer_charts import render_panel_charts
-from ui.widgets import Button, Slider
+from ui.widgets import Button
 from ui.setpoint_panel import SetpointPanel
 from ui.gl_utils import draw_grid
 
@@ -17,9 +17,14 @@ from models.quadrocopter_system import QuadrocopterSystem
 from models.ball_and_plate_system import BallAndPlateSystem
 from models.satellite_system import SatelliteSystem
 
+from utils.data_logger import DataLogger  
+
 
 def run_simulation(selected_mode, screen, clock, font_small, imu):
     gui_surface = pygame.Surface((config.PANEL_WIDTH, config.WINDOW_HEIGHT))
+
+    # Inicjalizacja instancji rejestratora danych
+    logger = DataLogger()
 
     # Inicjalizacja i alokacja bufora tekstury GUI
     gui_texture = glGenTextures(1)
@@ -41,17 +46,15 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
     else:  # QUADROCOPTER
         system = QuadrocopterSystem(config)
 
-    # --- INICJALIZACJA NIEZALEŻNEGO SETPOINT PANELU (Obniżona pozycja Y=620) ---
+    # --- INICJALIZACJA NIEZALEŻNEGO SETPOINT PANELU ---
     if selected_mode in ("BALL_AND_PLATE", "QUADROCOPTER"):
         setpoint_panel = SetpointPanel(num_inputs=2, labels=("SP X [m]", "SP Y [m]"), default_vals=("0.00", "0.00"), y=620)
-    elif selected_mode == "SATELLITE":
-        setpoint_panel = SetpointPanel(num_inputs=1, labels=("SP Kąt [deg]", ""), default_vals=("0.0", ""), y=620)
-    elif selected_mode == "FURUTA":
+    elif selected_mode in ("SATELLITE", "FURUTA"):
         setpoint_panel = SetpointPanel(num_inputs=1, labels=("SP Kąt [deg]", ""), default_vals=("0.0", ""), y=620)
     else:  # CRANE
         setpoint_panel = SetpointPanel(num_inputs=1, labels=("SP Pos [m]", ""), default_vals=("0.00", ""), y=620)
 
-    # Callback po wciśnięciu WYŚLIJ / Enter
+    # Callback setpointów
     def apply_setpoints():
         vals = setpoint_panel.get_values()
         if selected_mode in ("BALL_AND_PLATE", "QUADROCOPTER"):
@@ -72,45 +75,63 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
 
     setpoint_panel.set_callback(apply_setpoints)
 
+    # --- PRZYCISK REJESTRACJI DANYCH W LEWYM DOLNYM NAROŻNIKU OKNA MODELU ---
+    btn_rec_y = config.WINDOW_HEIGHT - 45
+    btn_record = Button(10, btn_rec_y, 200, 35, "START REJESTRACJI")
+    status_msg = ""
+    status_msg_timer = 0.0
+
     last_ticks = pygame.time.get_ticks()
 
     try:
         while True:
             current_ticks = pygame.time.get_ticks()
+            current_time_sec = current_ticks / 1000.0
             dt = (current_ticks - last_ticks) / 1000.0
             last_ticks = current_ticks
             if dt > 0.05:
                 dt = 0.016
 
-            # Synchronizacja pól tekstowych, jeśli tryb to MOUSE/IMU
+            # Synchronizacja pól tekstowych setpointów
             if setpoint_panel.current_mode != "MANUAL":
                 if selected_mode in ("BALL_AND_PLATE", "QUADROCOPTER"):
-                    sp_x = getattr(system, "setpoint_x", 0.0)
-                    sp_y = getattr(system, "setpoint_y", 0.0)
-                    setpoint_panel.update_text_fields(sp_x, sp_y)
+                    setpoint_panel.update_text_fields(getattr(system, "setpoint_x", 0.0), getattr(system, "setpoint_y", 0.0))
                 elif selected_mode == "SATELLITE":
-                    sp_angle = math.degrees(getattr(system, "setpoint_angle", 0.0))
-                    setpoint_panel.update_text_fields(sp_angle)
+                    setpoint_panel.update_text_fields(math.degrees(getattr(system, "setpoint_angle", 0.0)))
                 elif selected_mode == "FURUTA":
-                    sp_angle = math.degrees(getattr(system, "target_angle", 0.0))
-                    setpoint_panel.update_text_fields(sp_angle)
+                    setpoint_panel.update_text_fields(math.degrees(getattr(system, "target_angle", 0.0)))
                 elif selected_mode == "CRANE":
-                    sp_x = getattr(system, "setpoint_x", 0.0)
-                    setpoint_panel.update_text_fields(sp_x)
+                    setpoint_panel.update_text_fields(getattr(system, "setpoint_x", 0.0))
 
             # --- Obsługa zdarzeń ---
             for event in pygame.event.get():
                 if event.type == QUIT:
                     return "QUIT"
 
-                # Przygotowanie zdarzenia z przeliczoną pozycją dla panelu bocznego
+                # Zdarzenie dla przycisku nagrywania (znajduje się w obszarze widoku 3D)
+                if btn_record.handle_event(event):
+                    if not logger.is_recording:
+                        logger.start_recording(current_time_sec)
+                        btn_record.text = "STOP I ZAPISZ (CSV)"
+                        status_msg = "Rozpoczęto nagrywanie..."
+                        status_msg_timer = current_time_sec + 2.0
+                    else:
+                        saved_path = logger.stop_and_save(selected_mode)
+                        btn_record.text = "START REJESTRACJI"
+                        if saved_path:
+                            status_msg = f"Zapisano w: {saved_path}"
+                        else:
+                            status_msg = "Błąd zapisu / Brak danych"
+                        status_msg_timer = current_time_sec + 4.0
+                    continue
+
+                # Eventy przeliczone dla panelu bocznego
                 event_panel = event
                 if hasattr(event, "pos"):
                     event_dict = event.__dict__.copy()
                     event_dict["pos"] = (event.pos[0] - config.VIEW3D_WIDTH, event.pos[1])
                     event_panel = pygame.event.Event(event.type, event_dict)
 
-                # Przekazanie zdarzenia do SetpointPanel
                 if setpoint_panel.handle_event(event_panel):
                     continue
 
@@ -123,26 +144,26 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
                         elif hasattr(system, "reset"):
                             system.reset()
 
-                # Kliknięcie na scenę 3D (ustawianie zadania myszą)
+                # Kliknięcia w scenę 3D
                 if event.type == MOUSEBUTTONDOWN and event.button == 1:
-                    # Sterowanie kliknięciem na scenę działa TYLKO w trybie MOUSE
                     if event.pos[0] < config.VIEW3D_WIDTH and setpoint_panel.current_mode == "MOUSE":
-                        mx, my = event.pos
-                        norm_x = mx / config.VIEW3D_WIDTH
-                        if selected_mode == "QUADROCOPTER":
-                            system.setpoint_x = (norm_x - 0.5) * 2.4
-                            system.setpoint_y = -(((my / config.WINDOW_HEIGHT) - 0.5) * 2.4)
-                        elif selected_mode == "SATELLITE":
-                            dx = mx - (config.VIEW3D_WIDTH / 2)
-                            dy = (config.WINDOW_HEIGHT / 2) - my
-                            system.setpoint_angle = math.atan2(dy, dx)
-                        elif selected_mode in ("CRANE", "BALL_AND_PLATE"):
-                            norm_y = my / config.WINDOW_HEIGHT
-                            system.set_target_from_input(norm_x, norm_y)
-                        else:
-                            system.set_target_from_input(norm_x)
+                        # Pomijamy kliknięcie, jeśli kliknięto w obszar przycisku nagrywania
+                        if not btn_record.rect.contains(pygame.Rect(event.pos, (1, 1))):
+                            mx, my = event.pos
+                            norm_x = mx / config.VIEW3D_WIDTH
+                            if selected_mode == "QUADROCOPTER":
+                                system.setpoint_x = (norm_x - 0.5) * 2.4
+                                system.setpoint_y = -(((my / config.WINDOW_HEIGHT) - 0.5) * 2.4)
+                            elif selected_mode == "SATELLITE":
+                                dx = mx - (config.VIEW3D_WIDTH / 2)
+                                dy = (config.WINDOW_HEIGHT / 2) - my
+                                system.setpoint_angle = math.atan2(dy, dx)
+                            elif selected_mode in ("CRANE", "BALL_AND_PLATE"):
+                                system.set_target_from_input(norm_x, my / config.WINDOW_HEIGHT)
+                            else:
+                                system.set_target_from_input(norm_x)
 
-                # Zdarzenia kontrolek UI w panelu bocznym
+                # Controlki UI w panelu bocznym
                 if hasattr(event, "pos") and event.pos[0] >= config.VIEW3D_WIDTH:
                     if hasattr(system, "get_widgets"):
                         for w in system.get_widgets():
@@ -154,26 +175,28 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
                             else:
                                 w.handle_event(event_panel)
 
-            # Odczyt danych z IMU (tylko w trybie IMU)
+            # Odczyt danych IMU
             if setpoint_panel.current_mode == "IMU" and imu is not None and imu.is_connected():
                 raw_roll, raw_pitch = imu.get_orientation()
                 if selected_mode in ("QUADROCOPTER", "BALL_AND_PLATE"):
                     if hasattr(system, "process_serial_data"):
                         system.process_serial_data(raw_roll, raw_pitch)
                 elif selected_mode == "CRANE":
-                    norm_x = (raw_roll / 45.0 + 1.0) / 2.0
-                    system.set_target_from_input(max(0.0, min(1.0, norm_x)))
+                    system.set_target_from_input(max(0.0, min(1.0, (raw_roll / 45.0 + 1.0) / 2.0)))
                 elif selected_mode == "FURUTA":
                     if hasattr(system, "set_target_angle"):
                         system.set_target_angle(math.radians(raw_roll))
                 elif selected_mode == "SATELLITE":
                     system.setpoint_angle = math.radians(raw_roll)
 
-            # Aktualizacja stanu fizycznego
+            # Aktualizacja stanu fizyki
             if dt > 0:
                 system.step(dt)
 
-            # --- Renderowanie Sceny 3D ---
+            # Pobranie próbki danych (jeśli nagrywanie jest aktywne)
+            logger.sample(current_time_sec, system)
+
+            # --- RENDEROWANIE SCENY 3D ---
             glClearColor(0.08, 0.09, 0.12, 1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
@@ -217,48 +240,62 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
                 draw_grid()
                 (system.render_3d() if hasattr(system, "render_3d") else system.draw_3d())
 
-            # --- Renderowanie Panelu Bocznego GUI ---
+            # --- RENDEROWANIE PRZYCISKU W LEWYM DOLNYM NAROŻNIKU OKNA MODELU ---
+            glViewport(0, 0, config.VIEW3D_WIDTH, config.WINDOW_HEIGHT)
+            glMatrixMode(GL_PROJECTION)
+            glLoadIdentity()
+            glOrtho(0, config.VIEW3D_WIDTH, config.WINDOW_HEIGHT, 0, -1, 1)
+            glMatrixMode(GL_MODELVIEW)
+            glLoadIdentity()
+            glDisable(GL_LIGHTING)
+            glDisable(GL_DEPTH_TEST)
+
+            # Utworzenie powierzchni nakładki UI na widok 3D
+            overlay = pygame.Surface((config.VIEW3D_WIDTH, config.WINDOW_HEIGHT), pygame.SRCALPHA)
+            btn_record.draw(overlay, font_small)
+
+            if status_msg and current_time_sec < status_msg_timer:
+                txt_color = (255, 80, 80) if logger.is_recording else (100, 255, 100)
+                msg_surf = font_small.render(status_msg, True, txt_color)
+                overlay.blit(msg_surf, (220, btn_rec_y + 10))
+
+            tex_data = pygame.image.tostring(overlay, "RGBA", True)
+            glEnable(GL_BLEND)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+            glDrawPixels(config.VIEW3D_WIDTH, config.WINDOW_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, tex_data)
+            glDisable(GL_BLEND)
+
+            # --- RENDEROWANIE PANELU BOCZNEGO (GUI) ---
             gui_surface.fill(config.COLOR_BG)
 
-            if selected_mode == "CRANE":
-                title_txt = font_small.render("TRYB: CRANE ANTI-SWAY (ESC: Powrót)", True, (0, 200, 255))
-            elif selected_mode == "BALL_AND_PLATE":
-                title_txt = font_small.render("TRYB: BALL & PLATE (ESC: Powrót)", True, (0, 200, 255))
-            elif selected_mode == "QUADROCOPTER":
-                title_txt = font_small.render("TRYB: QUADROCOPTER PID (ESC: Powrót)", True, (0, 200, 255))
-            elif selected_mode == "SATELLITE":
-                title_txt = font_small.render("TRYB: SATELLITE ORIENTATION (ESC: Powrót)", True, (0, 200, 255))
-            else:  # FURUTA
-                title_txt = font_small.render("TRYB: FURUTA (ESC: Powrót)", True, (0, 200, 255))
-
+            titles = {
+                "CRANE": "TRYB: CRANE ANTI-SWAY (ESC: Powrót)",
+                "BALL_AND_PLATE": "TRYB: BALL & PLATE (ESC: Powrót)",
+                "QUADROCOPTER": "TRYB: QUADROCOPTER PID (ESC: Powrót)",
+                "SATELLITE": "TRYB: SATELLITE ORIENTATION (ESC: Powrót)",
+                "FURUTA": "TRYB: FURUTA (ESC: Powrót)",
+            }
+            title_txt = font_small.render(titles.get(selected_mode, ""), True, (0, 200, 255))
             gui_surface.blit(title_txt, (10, 10))
 
-            # Rysowanie widgetów zarejestrowanych w obiekcie system
             if hasattr(system, "get_widgets"):
                 for w in system.get_widgets():
                     w.draw(gui_surface, font_small)
 
-            # Rysowanie Wykresów
             render_panel_charts(gui_surface, selected_mode, system, font_small)
-
-            # Rysowanie SetpointPanel
             setpoint_panel.draw(gui_surface, font_small)
 
-            # Aktualizacja pod-obszaru tekstury VRAM
+            # Aktualizacja pod-obszaru tekstury VRAM dla panelu
             texture_data = pygame.image.tostring(gui_surface, "RGB", True)
             glBindTexture(GL_TEXTURE_2D, gui_texture)
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, config.PANEL_WIDTH, config.WINDOW_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, texture_data)
 
-            # Rysowanie kwadratu GUI w widoku Ortho
             glViewport(config.VIEW3D_WIDTH, 0, config.PANEL_WIDTH, config.WINDOW_HEIGHT)
             glMatrixMode(GL_PROJECTION)
             glLoadIdentity()
             glOrtho(0, config.PANEL_WIDTH, 0, config.WINDOW_HEIGHT, -1, 1)
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
-
-            glDisable(GL_LIGHTING)
-            glDisable(GL_DEPTH_TEST)
             glEnable(GL_TEXTURE_2D)
 
             glColor4f(1.0, 1.0, 1.0, 1.0)
