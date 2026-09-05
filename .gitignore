@@ -26,3 +26,5 @@ Thumbs.db
 
 python_app/build/
 python_app/dist/
+
+python_app/logs
