@@ -8,6 +8,7 @@ import config
 from ui.renderer_3d import draw_crane_scene
 from ui.renderer_charts import render_panel_charts
 from ui.widgets import Button, Slider
+from ui.setpoint_panel import SetpointPanel
 from ui.gl_utils import draw_grid
 
 from models.crane_system import CraneSystem
@@ -43,6 +44,37 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
         slider_kd = Slider(20, 85, 220, 12, 0.0, 15.0, system.pid_x.Kd, "Kd")
         btn_reset = Button(20, 115, 220, 25, "RESET STANU (SPACE)")
 
+    # --- INICJALIZACJA NIEZALEŻNEGO SETPOINT PANELU (Obniżona pozycja Y=620) ---
+    if selected_mode in ("BALL_AND_PLATE", "QUADROCOPTER"):
+        setpoint_panel = SetpointPanel(num_inputs=2, labels=("SP X [m]", "SP Y [m]"), default_vals=("0.00", "0.00"), y=620)
+    elif selected_mode == "SATELLITE":
+        setpoint_panel = SetpointPanel(num_inputs=1, labels=("SP Kąt [deg]", ""), default_vals=("0.0", ""), y=620)
+    elif selected_mode == "FURUTA":
+        setpoint_panel = SetpointPanel(num_inputs=1, labels=("SP Kąt [deg]", ""), default_vals=("0.0", ""), y=620)
+    else:  # CRANE
+        setpoint_panel = SetpointPanel(num_inputs=1, labels=("SP Pos [m]", ""), default_vals=("0.00", ""), y=620)
+
+    # Callback po wciśnięciu WYŚLIJ / Enter
+    def apply_setpoints():
+        vals = setpoint_panel.get_values()
+        if selected_mode in ("BALL_AND_PLATE", "QUADROCOPTER"):
+            v1, v2 = vals
+            if v1 is not None and hasattr(system, "setpoint_x"):
+                system.setpoint_x = v1
+            if v2 is not None and hasattr(system, "setpoint_y"):
+                system.setpoint_y = v2
+        elif selected_mode == "SATELLITE":
+            if vals is not None and hasattr(system, "setpoint_angle"):
+                system.setpoint_angle = math.radians(vals)
+        elif selected_mode == "FURUTA":
+            if vals is not None and hasattr(system, "set_target_angle"):
+                system.set_target_angle(math.radians(vals))
+        elif selected_mode == "CRANE":
+            if vals is not None and hasattr(system, "setpoint_x"):
+                system.setpoint_x = vals
+
+    setpoint_panel.set_callback(apply_setpoints)
+
     # Bufory danych historycznych (QUADROCOPTER)
     hist_sp_x, hist_pv_x, hist_sp_y, hist_pv_y = [], [], [], []
     hist_roll, hist_pitch = [], []
@@ -58,10 +90,37 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
             if dt > 0.05:
                 dt = 0.016
 
+            # Synchronizacja pól tekstowych, jeśli tryb to MOUSE/IMU
+            if setpoint_panel.current_mode != "MANUAL":
+                if selected_mode in ("BALL_AND_PLATE", "QUADROCOPTER"):
+                    sp_x = getattr(system, "setpoint_x", 0.0)
+                    sp_y = getattr(system, "setpoint_y", 0.0)
+                    setpoint_panel.update_text_fields(sp_x, sp_y)
+                elif selected_mode == "SATELLITE":
+                    sp_angle = math.degrees(getattr(system, "setpoint_angle", 0.0))
+                    setpoint_panel.update_text_fields(sp_angle)
+                elif selected_mode == "FURUTA":
+                    sp_angle = math.degrees(getattr(system, "target_angle", 0.0))
+                    setpoint_panel.update_text_fields(sp_angle)
+                elif selected_mode == "CRANE":
+                    sp_x = getattr(system, "setpoint_x", 0.0)
+                    setpoint_panel.update_text_fields(sp_x)
+
             # --- Obsługa zdarzeń ---
             for event in pygame.event.get():
                 if event.type == QUIT:
                     return "QUIT"
+
+                # Przygotowanie zdarzenia z przeliczoną pozycją dla panelu bocznego
+                event_panel = event
+                if hasattr(event, "pos"):
+                    event_dict = event.__dict__.copy()
+                    event_dict["pos"] = (event.pos[0] - config.VIEW3D_WIDTH, event.pos[1])
+                    event_panel = pygame.event.Event(event.type, event_dict)
+
+                # Przekazanie zdarzenia do SetpointPanel
+                if setpoint_panel.handle_event(event_panel):
+                    continue
 
                 if event.type == KEYDOWN:
                     if event.key == K_ESCAPE:
@@ -72,8 +131,10 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
                         elif hasattr(system, "reset"):
                             system.reset()
 
+                # Kliknięcie na scenę 3D (ustawianie zadania myszą)
                 if event.type == MOUSEBUTTONDOWN and event.button == 1:
-                    if event.pos[0] < config.VIEW3D_WIDTH:
+                    # Sterowanie kliknięciem na scenę działa TYLKO w trybie MOUSE
+                    if event.pos[0] < config.VIEW3D_WIDTH and setpoint_panel.current_mode == "MOUSE":
                         mx, my = event.pos
                         norm_x = mx / config.VIEW3D_WIDTH
                         if selected_mode == "QUADROCOPTER":
@@ -89,37 +150,34 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
                         else:
                             system.set_target_from_input(norm_x)
 
-                if event.type in (MOUSEBUTTONDOWN, MOUSEBUTTONUP, MOUSEMOTION):
-                    if event.pos[0] >= config.VIEW3D_WIDTH:
-                        event_panel = pygame.event.Event(event.type, event.__dict__)
-                        event_panel.pos = (event.pos[0] - config.VIEW3D_WIDTH, event.pos[1])
-
-                        if selected_mode == "QUADROCOPTER":
-                            slider_kp.handle_event(event_panel)
-                            slider_kd.handle_event(event_panel)
-                            if btn_reset.handle_event(event_panel):
-                                if hasattr(system, "setpoint_x"):
-                                    system.setpoint_x = system.setpoint_y = 0.0
-                                if hasattr(system, "reset_state"):
-                                    system.reset_state()
-                                elif hasattr(system, "reset"):
-                                    system.reset()
-                        else:
-                            if hasattr(system, "get_widgets"):
-                                for w in system.get_widgets():
-                                    if isinstance(w, Button) and w.handle_event(event_panel):
-                                        if hasattr(system, "reset_state"):
-                                            system.reset_state()
-                                        elif hasattr(system, "reset"):
-                                            system.reset()
-                                    else:
-                                        w.handle_event(event_panel)
+                # Zdarzenia pozostałych kontrolek UI
+                if hasattr(event, "pos") and event.pos[0] >= config.VIEW3D_WIDTH:
+                    if selected_mode == "QUADROCOPTER":
+                        slider_kp.handle_event(event_panel)
+                        slider_kd.handle_event(event_panel)
+                        if btn_reset.handle_event(event_panel):
+                            if hasattr(system, "setpoint_x"):
+                                system.setpoint_x = system.setpoint_y = 0.0
+                            if hasattr(system, "reset_state"):
+                                system.reset_state()
+                            elif hasattr(system, "reset"):
+                                system.reset()
+                    else:
+                        if hasattr(system, "get_widgets"):
+                            for w in system.get_widgets():
+                                if isinstance(w, Button) and w.handle_event(event_panel):
+                                    if hasattr(system, "reset_state"):
+                                        system.reset_state()
+                                    elif hasattr(system, "reset"):
+                                        system.reset()
+                                else:
+                                    w.handle_event(event_panel)
 
             if selected_mode == "QUADROCOPTER":
                 system.update_params(Kp=slider_kp.val, Kd=slider_kd.val)
 
-            # Odczyt danych z IMU
-            if imu is not None and imu.is_connected():
+            # Odczyt danych z IMU (tylko w trybie IMU)
+            if setpoint_panel.current_mode == "IMU" and imu is not None and imu.is_connected():
                 raw_roll, raw_pitch = imu.get_orientation()
                 if selected_mode in ("QUADROCOPTER", "BALL_AND_PLATE"):
                     if hasattr(system, "process_serial_data"):
@@ -199,7 +257,6 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
             # --- Renderowanie Panelu Bocznego GUI ---
             gui_surface.fill(config.COLOR_BG)
 
-            # Rysowanie Nagłówka i Kontrolek dla danego trybu
             if selected_mode == "CRANE":
                 title_txt = font_small.render("TRYB: CRANE ANTI-SWAY (ESC: Powrót)", True, (0, 200, 255))
                 gui_surface.blit(title_txt, (10, 15))
@@ -231,17 +288,20 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
                 for w in system.get_widgets():
                     w.draw(gui_surface, font_small)
 
-            # Rysowanie Wykresów z nowo utworzonego modułu ui.renderer_charts
+            # Rysowanie Wykresów
             extra_data = (hist_sp_x, hist_pv_x, hist_sp_y, hist_pv_y, hist_roll, hist_pitch) if selected_mode == "QUADROCOPTER" else None
             render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hist_data=extra_data)
 
-            # Rysowanie tekstu statusu (z wyjątkiem Quadro, który nie zwraca status_text z system.get_charts_data)
+            # Rysowanie tekstu statusu
             if selected_mode != "QUADROCOPTER" and hasattr(system, "get_charts_data"):
                 charts_data = system.get_charts_data()
                 if "status_text" in charts_data and "status_color" in charts_data:
-                    status_y = 570 if selected_mode == "BALL_AND_PLATE" else (480 if selected_mode == "FURUTA" else 490)
+                    status_y = 550 if selected_mode == "BALL_AND_PLATE" else (480 if selected_mode == "FURUTA" else 490)
                     status_txt = font_small.render(charts_data["status_text"], True, charts_data["status_color"])
                     gui_surface.blit(status_txt, (15, status_y))
+
+            # Rysowanie SetpointPanel
+            setpoint_panel.draw(gui_surface, font_small)
 
             # Aktualizacja pod-obszaru tekstury VRAM
             texture_data = pygame.image.tostring(gui_surface, "RGB", True)

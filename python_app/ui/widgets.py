@@ -108,3 +108,54 @@ def draw_chart(surface, rect, font, title, y_min, y_max, data_series):
                 py = ax_y + ax_h * (1.0 - norm_val)
                 pts.append((px, py))
             pygame.draw.aalines(surface, color, False, pts)
+
+class TextInput:
+    """Prosty widget pola tekstowego do wprowadzania wartości."""
+    def __init__(self, x, y, width, height, label="", default_text="0.00"):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = str(default_text)
+        self.label = label
+        self.active = False
+        self.color_inactive = (70, 70, 80)
+        self.color_active = (0, 200, 255)
+        self.bg_color = (20, 20, 30)
+        self.text_color = (255, 255, 255)
+
+    def handle_event(self, event):
+        """Obsługuje kliknięcia myszą oraz wpisywanie z klawiatury. Zwraca True przy wciśnięciu Enter."""
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            # Aktywuj pole jeśli kliknięto w jego obszarze
+            self.active = self.rect.collidepoint(event.pos)
+            return False
+
+        if event.type == pygame.KEYDOWN and self.active:
+            if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+                self.active = False
+                return True  # Wciśnięto ENTER (zatwierdzenie)
+            elif event.key == pygame.K_BACKSPACE:
+                self.text = self.text[:-1]
+            else:
+                # Akceptuj tylko cyfry, kropkę, minus
+                if event.unicode in "0123456789.-":
+                    self.text += event.unicode
+        return False
+
+    def get_value(self):
+        """Zwraca sparsowaną wartość float lub None jeśli wpisany tekst jest niepoprawny."""
+        try:
+            return float(self.text)
+        except ValueError:
+            return None
+
+    def draw(self, surface, font):
+        # Etykieta nad polem z mniejszym rozmiarem lub mniejszym offsetem
+        if self.label:
+            label_surf = font.render(self.label, True, (160, 160, 170))
+            surface.blit(label_surf, (self.rect.x, self.rect.y - 14))
+
+        color = self.color_active if self.active else self.color_inactive
+        pygame.draw.rect(surface, self.bg_color, self.rect)
+        pygame.draw.rect(surface, color, self.rect, 1)
+
+        txt_surf = font.render(self.text, True, self.text_color)
+        surface.blit(txt_surf, (self.rect.x + 4, self.rect.y + 2))
