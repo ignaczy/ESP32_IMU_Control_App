@@ -28,16 +28,13 @@ def render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hi
     elif selected_mode == "BALL_AND_PLATE":
         charts_data = system.get_charts_data()
         
-        # Zawsze uwzględniamy 4 wykresy (w tym sygnał sterujący U)
         charts = [
             {"title": "Pozycja X [m]", "min_val": -1.5, "max_val": 1.5, "series": charts_data.get("pos_x_chart", [])},
             {"title": "Pozycja Y [m]", "min_val": -1.5, "max_val": 1.5, "series": charts_data.get("pos_y_chart", [])},
-            {"title": "Katy Plytki [deg]", "min_val": -20.0, "max_val": 20.0, "series": charts_data.get("angles_chart", [])},
             {"title": "Sygnal Sterujacy U [deg]", "min_val": -20.0, "max_val": 20.0, "series": charts_data.get("u_chart", [])}
         ]
         
-        # Dostosowana wysokość prostokąta, aby 4 wykresy mieściły się poprawnie
-        chart_rect = pygame.Rect(10, 150, config.PANEL_WIDTH - 20, 440)
+        chart_rect = pygame.Rect(10, 180, config.PANEL_WIDTH - 20, 350)
 
         status_text = getattr(system, "status_text", "")
         status_color = getattr(system, "status_color", (0, 255, 100))
@@ -50,13 +47,10 @@ def render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hi
         charts = [
             {"title": "Pozycja X [m]", "min_val": -2.0, "max_val": 2.0, "series": charts_data.get("pos_x_chart", [])},
             {"title": "Pozycja Y [m]", "min_val": -2.0, "max_val": 2.0, "series": charts_data.get("pos_y_chart", [])},
-            {"title": "Katy Rzeczywiste [deg]", "min_val": -20.0, "max_val": 20.0, "series": charts_data.get("angles_chart", [])},
+            {"title": "Sygnal Sterujacy U [deg]", "min_val": -limit, "max_val": limit, "series": charts_data.get("u_chart", [])}
         ]
-        if "u_chart" in charts_data:
-            charts.append({"title": "Sygnal Sterujacy U [deg]", "min_val": -limit, "max_val": limit, "series": charts_data["u_chart"]})
-            chart_rect = pygame.Rect(10, 150, config.PANEL_WIDTH - 20, 420)
-        else:
-            chart_rect = pygame.Rect(10, 150, config.PANEL_WIDTH - 20, 400)
+        
+        chart_rect = pygame.Rect(10, 180, config.PANEL_WIDTH - 20, 350)
 
         status_text = getattr(system, "status_text", "")
         status_color = getattr(system, "status_color", (0, 255, 100))
@@ -69,12 +63,13 @@ def render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hi
             {"title": "Predkosc Kola Zamachowego [rad/s]", "min_val": -system.max_wheel_speed, "max_val": system.max_wheel_speed, "series": charts_data.get("wheel_chart", [])},
         ]
         if "u_chart" in charts_data:
-            charts.append({"title": "Moment Sterujacy M [Nm]", "min_val": -10.0, "max_val": 10.0, "series": charts_data["u_chart"]})
-            chart_rect = pygame.Rect(10, 150, config.PANEL_WIDTH - 20, 380)
+            charts.append({"title": "Moment Sterujacy M [Nm]", "min_val": -25.0, "max_val": 25.0, "series": charts_data["u_chart"]})
+            chart_rect = pygame.Rect(10, 175, config.PANEL_WIDTH - 20, 370)
         else:
-            chart_rect = pygame.Rect(10, 150, config.PANEL_WIDTH - 20, 320)
+            chart_rect = pygame.Rect(10, 175, config.PANEL_WIDTH - 20, 320)
 
         status_text = getattr(system, "status_text", "")
+        status_color = getattr(system, "status_color", (0, 255, 100))
         draw_chart(gui_surface, chart_rect, font_small, charts)
 
     elif selected_mode == "FURUTA":

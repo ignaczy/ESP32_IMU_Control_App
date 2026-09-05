@@ -40,9 +40,6 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
         system = SatelliteSystem(config)
     else:  # QUADROCOPTER
         system = QuadrocopterSystem(config)
-        slider_kp = Slider(20, 45, 220, 12, 0.0, 20.0, system.pid_x.Kp, "Kp")
-        slider_kd = Slider(20, 85, 220, 12, 0.0, 15.0, system.pid_x.Kd, "Kd")
-        btn_reset = Button(20, 115, 220, 25, "RESET STANU (SPACE)")
 
     # --- INICJALIZACJA NIEZALEŻNEGO SETPOINT PANELU (Obniżona pozycja Y=620) ---
     if selected_mode in ("BALL_AND_PLATE", "QUADROCOPTER"):
@@ -74,11 +71,6 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
                 system.setpoint_x = vals
 
     setpoint_panel.set_callback(apply_setpoints)
-
-    # Bufory danych historycznych (QUADROCOPTER)
-    hist_sp_x, hist_pv_x, hist_sp_y, hist_pv_y = [], [], [], []
-    hist_roll, hist_pitch = [], []
-    MAX_HIST = 150
 
     last_ticks = pygame.time.get_ticks()
 
@@ -150,31 +142,17 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
                         else:
                             system.set_target_from_input(norm_x)
 
-                # Zdarzenia pozostałych kontrolek UI
+                # Zdarzenia kontrolek UI w panelu bocznym
                 if hasattr(event, "pos") and event.pos[0] >= config.VIEW3D_WIDTH:
-                    if selected_mode == "QUADROCOPTER":
-                        slider_kp.handle_event(event_panel)
-                        slider_kd.handle_event(event_panel)
-                        if btn_reset.handle_event(event_panel):
-                            if hasattr(system, "setpoint_x"):
-                                system.setpoint_x = system.setpoint_y = 0.0
-                            if hasattr(system, "reset_state"):
-                                system.reset_state()
-                            elif hasattr(system, "reset"):
-                                system.reset()
-                    else:
-                        if hasattr(system, "get_widgets"):
-                            for w in system.get_widgets():
-                                if isinstance(w, Button) and w.handle_event(event_panel):
-                                    if hasattr(system, "reset_state"):
-                                        system.reset_state()
-                                    elif hasattr(system, "reset"):
-                                        system.reset()
-                                else:
-                                    w.handle_event(event_panel)
-
-            if selected_mode == "QUADROCOPTER":
-                system.update_params(Kp=slider_kp.val, Kd=slider_kd.val)
+                    if hasattr(system, "get_widgets"):
+                        for w in system.get_widgets():
+                            if isinstance(w, Button) and w.handle_event(event_panel):
+                                if hasattr(system, "reset_state"):
+                                    system.reset_state()
+                                elif hasattr(system, "reset"):
+                                    system.reset()
+                            else:
+                                w.handle_event(event_panel)
 
             # Odczyt danych z IMU (tylko w trybie IMU)
             if setpoint_panel.current_mode == "IMU" and imu is not None and imu.is_connected():
@@ -193,22 +171,7 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
 
             # Aktualizacja stanu fizycznego
             if dt > 0:
-                if selected_mode == "QUADROCOPTER":
-                    target_roll, target_pitch = system.step(dt)
-                    ball_pos = getattr(system, "ball_pos", getattr(system, "pos", [0.0, 0.0]))
-                    hist_sp_x.append(system.setpoint_x)
-                    hist_pv_x.append(ball_pos[0])
-                    hist_sp_y.append(system.setpoint_y)
-                    hist_pv_y.append(ball_pos[1])
-                    hist_roll.append(target_roll)
-                    hist_pitch.append(target_pitch)
-
-                    if len(hist_sp_x) > MAX_HIST:
-                        hist_sp_x.pop(0); hist_pv_x.pop(0)
-                        hist_sp_y.pop(0); hist_pv_y.pop(0)
-                        hist_roll.pop(0); hist_pitch.pop(0)
-                else:
-                    system.step(dt)
+                system.step(dt)
 
             # --- Renderowanie Sceny 3D ---
             glClearColor(0.08, 0.09, 0.12, 1.0)
@@ -259,46 +222,24 @@ def run_simulation(selected_mode, screen, clock, font_small, imu):
 
             if selected_mode == "CRANE":
                 title_txt = font_small.render("TRYB: CRANE ANTI-SWAY (ESC: Powrót)", True, (0, 200, 255))
-                gui_surface.blit(title_txt, (10, 15))
-                for w in system.get_widgets():
-                    w.draw(gui_surface, font_small)
-
             elif selected_mode == "BALL_AND_PLATE":
                 title_txt = font_small.render("TRYB: BALL & PLATE (ESC: Powrót)", True, (0, 200, 255))
-                gui_surface.blit(title_txt, (10, 10))
-                for w in system.get_widgets():
-                    w.draw(gui_surface, font_small)
-
             elif selected_mode == "QUADROCOPTER":
                 title_txt = font_small.render("TRYB: QUADROCOPTER PID (ESC: Powrót)", True, (0, 200, 255))
-                gui_surface.blit(title_txt, (10, 10))
-                slider_kp.draw(gui_surface, font_small)
-                slider_kd.draw(gui_surface, font_small)
-                btn_reset.draw(gui_surface, font_small)
-
             elif selected_mode == "SATELLITE":
                 title_txt = font_small.render("TRYB: SATELLITE ORIENTATION (ESC: Powrót)", True, (0, 200, 255))
-                gui_surface.blit(title_txt, (10, 10))
-                for w in system.get_widgets():
-                    w.draw(gui_surface, font_small)
-
             else:  # FURUTA
                 title_txt = font_small.render("TRYB: FURUTA (ESC: Powrót)", True, (0, 200, 255))
-                gui_surface.blit(title_txt, (10, 10))
+
+            gui_surface.blit(title_txt, (10, 10))
+
+            # Rysowanie widgetów zarejestrowanych w obiekcie system
+            if hasattr(system, "get_widgets"):
                 for w in system.get_widgets():
                     w.draw(gui_surface, font_small)
 
             # Rysowanie Wykresów
-            extra_data = (hist_sp_x, hist_pv_x, hist_sp_y, hist_pv_y, hist_roll, hist_pitch) if selected_mode == "QUADROCOPTER" else None
-            render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hist_data=extra_data)
-
-            # Rysowanie tekstu statusu
-            if selected_mode != "QUADROCOPTER" and hasattr(system, "get_charts_data"):
-                charts_data = system.get_charts_data()
-                if "status_text" in charts_data and "status_color" in charts_data:
-                    status_y = 550 if selected_mode == "BALL_AND_PLATE" else (480 if selected_mode == "FURUTA" else 490)
-                    status_txt = font_small.render(charts_data["status_text"], True, charts_data["status_color"])
-                    gui_surface.blit(status_txt, (15, status_y))
+            render_panel_charts(gui_surface, selected_mode, system, font_small)
 
             # Rysowanie SetpointPanel
             setpoint_panel.draw(gui_surface, font_small)

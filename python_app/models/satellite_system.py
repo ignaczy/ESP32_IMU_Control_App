@@ -75,12 +75,13 @@ class SatelliteSystem(BaseSystem):
         self.hist_sp = deque([0.0] * self.max_hist, maxlen=self.max_hist)
         self.hist_pv = deque([0.0] * self.max_hist, maxlen=self.max_hist)
         self.hist_wheel_speed = deque([0.0] * self.max_hist, maxlen=self.max_hist)
-        self.hist_u = deque([0.0] * self.max_hist, maxlen=self.max_hist)  # Bufor momentu sterującego
+        self.hist_u = deque([0.0] * self.max_hist, maxlen=self.max_hist)
 
-        # Inicjalizacja Widgetów
-        self.slider_kp = Slider(20, 45, 220, 12, 0.0, 40.0, self.pid.Kp, "Kp")
-        self.slider_kd = Slider(20, 85, 220, 12, 0.0, 30.0, self.pid.Kd, "Kd")
-        self.btn_reset = Button(20, 115, 220, 25, "RESET STANU (SPACE)")
+        # Inicjalizacja Widgetów (dodano suwak Ki, przesunięto Kd oraz Button)
+        self.slider_kp = Slider(20, 35, 220, 12, 0.0, 40.0, self.pid.Kp, "Kp")
+        self.slider_ki = Slider(20, 70, 220, 12, 0.0, 10.0, self.pid.Ki, "Ki")
+        self.slider_kd = Slider(20, 105, 220, 12, 0.0, 30.0, self.pid.Kd, "Kd")
+        self.btn_reset = Button(20, 135, 220, 25, "RESET STANU (SPACE)")
 
         self.update_status()
 
@@ -110,10 +111,10 @@ class SatelliteSystem(BaseSystem):
         self.hist_u.extend([0.0] * self.max_hist)
         self.update_status()
 
-    def update_params(self, Kp, Kd, Ki=0.0):
+    def update_params(self, Kp, Ki, Kd):
         self.pid.Kp = Kp
-        self.pid.Kd = Kd
         self.pid.Ki = Ki
+        self.pid.Kd = Kd
 
     def set_target_from_input(self, norm_x, norm_y=0.5):
         self.setpoint_angle = normalize_angle((norm_x - 0.5) * 2.0 * math.pi)
@@ -125,8 +126,8 @@ class SatelliteSystem(BaseSystem):
         if dt <= 0.0001:
             return
 
-        # Aktualizacja parametrów regulatora z suwaków
-        self.update_params(self.slider_kp.val, self.slider_kd.val)
+        # Aktualizacja parametrów regulatora z suwaków (w tym człon Ki)
+        self.update_params(self.slider_kp.val, self.slider_ki.val, self.slider_kd.val)
 
         self.current_torque = self.pid.compute(self.setpoint_angle, self.angle_sat, self.omega_sat, dt)
         torque = self.current_torque
@@ -153,12 +154,12 @@ class SatelliteSystem(BaseSystem):
         self.hist_sp.append(math.degrees(self.setpoint_angle))
         self.hist_pv.append(math.degrees(self.angle_sat))
         self.hist_wheel_speed.append(self.omega_wheel)
-        self.hist_u.append(self.current_torque)  # Rejestracja momentu sterującego
+        self.hist_u.append(self.current_torque)
 
         self.update_status()
 
     def get_widgets(self):
-        return [self.slider_kp, self.slider_kd, self.btn_reset]
+        return [self.slider_kp, self.slider_ki, self.slider_kd, self.btn_reset]
 
     def get_charts_data(self):
         return {

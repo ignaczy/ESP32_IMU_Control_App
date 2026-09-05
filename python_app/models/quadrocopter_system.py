@@ -57,10 +57,11 @@ class QuadrocopterSystem(BaseSystem):
         self.pid_x = SafePID(Kp=self.Kp, Ki=self.Ki, Kd=self.Kd, limit=self.pid_limit)
         self.pid_y = SafePID(Kp=self.Kp, Ki=self.Ki, Kd=self.Kd, limit=self.pid_limit)
 
-        # WIDGETY UI
-        self.slider_kp = Slider(20, 45, 220, 12, 0.0, 20.0, self.Kp, "Kp")
-        self.slider_kd = Slider(20, 85, 220, 12, 0.0, 10.0, self.Kd, "Kd")
-        self.btn_reset = Button(20, 115, 220, 25, "RESET STANU (SPACE)")
+        # WIDGETY UI (lekko obniżone i z suwakiem Ki)
+        self.slider_kp = Slider(20, 50, 220, 12, 0.0, 20.0, self.Kp, "Kp")
+        self.slider_ki = Slider(20, 80, 220, 12, 0.0, 5.0, self.Ki, "Ki")
+        self.slider_kd = Slider(20, 110, 220, 12, 0.0, 10.0, self.Kd, "Kd")
+        self.btn_reset = Button(20, 140, 220, 25, "RESET STANU (SPACE)")
 
         # ATRYBUTY STATUSU
         self.status_text = "QUADROCOPTER ACTIVE"
@@ -75,7 +76,7 @@ class QuadrocopterSystem(BaseSystem):
         self.hist_roll = deque(maxlen=self.MAX_HIST)
         self.hist_pitch = deque(maxlen=self.MAX_HIST)
         
-        # Bufory sygnałów sterujących (zadanych kątów wychylenia z regulatora PID)
+        # Bufory sygnałów sterujących
         self.hist_u_roll = deque(maxlen=self.MAX_HIST)
         self.hist_u_pitch = deque(maxlen=self.MAX_HIST)
 
@@ -119,13 +120,13 @@ class QuadrocopterSystem(BaseSystem):
     def reset(self):
         self.reset_state()
 
-    def update_params(self, Kp, Kd, Ki=0.0):
+    def update_params(self, Kp, Ki, Kd):
         self.Kp = Kp
-        self.Kd = Kd
         self.Ki = Ki
+        self.Kd = Kd
         self.pid_x.Kp = self.pid_y.Kp = Kp
-        self.pid_x.Kd = self.pid_y.Kd = Kd
         self.pid_x.Ki = self.pid_y.Ki = Ki
+        self.pid_x.Kd = self.pid_y.Kd = Kd
 
     def update_status(self):
         """Aktualizuje atrybuty tekstu statusu."""
@@ -141,7 +142,8 @@ class QuadrocopterSystem(BaseSystem):
         self.setpoint_y = max(-2.0, min(2.0, (pitch / 45.0) * 2.0))
 
     def step(self, dt):
-        self.update_params(self.slider_kp.val, self.slider_kd.val, self.Ki)
+        # Pobieranie wartości ze wszystkich 3 sliderów
+        self.update_params(self.slider_kp.val, self.slider_ki.val, self.slider_kd.val)
 
         if dt <= 0.0001:
             return math.degrees(self.phi), math.degrees(self.theta)
@@ -182,7 +184,7 @@ class QuadrocopterSystem(BaseSystem):
         return target_roll, target_pitch
 
     def get_widgets(self):
-        return [self.slider_kp, self.slider_kd, self.btn_reset]
+        return [self.slider_kp, self.slider_ki, self.slider_kd, self.btn_reset]
 
     def get_charts_data(self):
         return {
@@ -193,10 +195,6 @@ class QuadrocopterSystem(BaseSystem):
             "pos_y_chart": [
                 {"data": list(self.hist_sp_y), "color": (80, 220, 120)},
                 {"data": list(self.hist_pv_y), "color": (200, 100, 255)},
-            ],
-            "angles_chart": [
-                {"data": list(self.hist_roll), "color": (255, 90, 90)},
-                {"data": list(self.hist_pitch), "color": (180, 130, 255)},
             ],
             "u_chart": [
                 {"data": list(self.hist_u_roll), "color": (255, 140, 0)},

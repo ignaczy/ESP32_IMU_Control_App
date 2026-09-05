@@ -23,6 +23,7 @@ class BallAndPlateSystem(BaseSystem):
 
         pid_cfg = getattr(config, "PID_BALL_PLATE_CONFIG", {})
         self.Kp = pid_cfg.get("Kp_default", 3.5)
+        self.Ki = pid_cfg.get("Ki_default", 0.0)
         self.Kd = pid_cfg.get("Kd_default", 2.8)
 
         # Wysokość zawieszenia platformy nad podłożem [m]
@@ -49,28 +50,40 @@ class BallAndPlateSystem(BaseSystem):
         self.status_text = "BALL & PLATE ACTIVE"
         self.status_color = (0, 255, 100)
 
-        # Kontroler PID (PD)
+        # Kontroler PID z obsługą członu całkującego (Ki)
         class PID:
-            def __init__(self, Kp, Kd):
+            def __init__(self, Kp, Ki, Kd, integral_limit=10.0):
                 self.Kp = Kp
+                self.Ki = Ki
                 self.Kd = Kd
+                self.integral = 0.0
                 self.prev_error = 0.0
+                self.integral_limit = integral_limit
 
             def update(self, setpoint, current, dt):
                 if dt <= 0.0001:
                     return 0.0
                 error = setpoint - current
+                self.integral += error * dt
+                # Ograniczenie narastania całki (Anti-windup)
+                self.integral = max(-self.integral_limit, min(self.integral_limit, self.integral))
+                
                 derivative = (error - self.prev_error) / dt
                 self.prev_error = error
-                return self.Kp * error + self.Kd * derivative
+                return self.Kp * error + self.Ki * self.integral + self.Kd * derivative
 
-        self.pid_x = PID(self.Kp, self.Kd)
-        self.pid_y = PID(self.Kp, self.Kd)
+            def reset(self):
+                self.integral = 0.0
+                self.prev_error = 0.0
 
-        # WIDGETY UI
-        self.slider_kp = Slider(20, 45, 220, 12, 0.0, 15.0, self.Kp, "Kp")
-        self.slider_kd = Slider(20, 85, 220, 12, 0.0, 10.0, self.Kd, "Kd")
-        self.btn_reset = Button(20, 115, 220, 25, "RESET STANU (SPACE)")
+        self.pid_x = PID(self.Kp, self.Ki, self.Kd)
+        self.pid_y = PID(self.Kp, self.Ki, self.Kd)
+
+        # WIDGETY UI (z uwzględnieniem suwaka Ki)
+        self.slider_kp = Slider(20, 40, 220, 12, 0.0, 15.0, self.Kp, "Kp")
+        self.slider_ki = Slider(20, 70, 220, 12, 0.0, 5.0, self.Ki, "Ki")
+        self.slider_kd = Slider(20, 100, 220, 12, 0.0, 10.0, self.Kd, "Kd")
+        self.btn_reset = Button(20, 130, 220, 25, "RESET STANU (SPACE)")
 
         # BUFORY HISTORII DLA WYKRESÓW
         self.MAX_HIST = 150
@@ -78,20 +91,21 @@ class BallAndPlateSystem(BaseSystem):
         self.hist_pv_x = deque(maxlen=self.MAX_HIST)
         self.hist_sp_y = deque(maxlen=self.MAX_HIST)
         self.hist_pv_y = deque(maxlen=self.MAX_HIST)
-        self.hist_roll = deque(maxlen=self.MAX_HIST)
-        self.hist_pitch = deque(maxlen=self.MAX_HIST)
-        # Dodane bufory na sygnały sterujące U [deg]
+        # Bufory na sygnały sterujące U [deg]
         self.hist_u_pitch = deque(maxlen=self.MAX_HIST)
         self.hist_u_roll = deque(maxlen=self.MAX_HIST)
 
         self.reset_state()
 
-    def update_params(self, Kp, Kd):
+    def update_params(self, Kp, Ki, Kd):
         self.Kp = Kp
+        self.Ki = Ki
         self.Kd = Kd
         self.pid_x.Kp = Kp
+        self.pid_x.Ki = Ki
         self.pid_x.Kd = Kd
         self.pid_y.Kp = Kp
+        self.pid_y.Ki = Ki
         self.pid_y.Kd = Kd
 
     def update_status(self):
@@ -107,8 +121,8 @@ class BallAndPlateSystem(BaseSystem):
         self.plate_pitch = 0.0
         self.setpoint_x = 0.0
         self.setpoint_y = 0.0
-        self.pid_x.prev_error = 0.0
-        self.pid_y.prev_error = 0.0
+        self.pid_x.reset()
+        self.pid_y.reset()
         self.roll_buffer.clear()
         self.pitch_buffer.clear()
         self.roll_buffer.extend([0.0] * 5)
@@ -118,8 +132,6 @@ class BallAndPlateSystem(BaseSystem):
         self.hist_pv_x.clear()
         self.hist_sp_y.clear()
         self.hist_pv_y.clear()
-        self.hist_roll.clear()
-        self.hist_pitch.clear()
         self.hist_u_pitch.clear()
         self.hist_u_roll.clear()
 
@@ -138,7 +150,7 @@ class BallAndPlateSystem(BaseSystem):
         self.setpoint_y = (norm_y - 0.5) * (limit_pos * 2)
 
     def get_widgets(self):
-        return [self.slider_kp, self.slider_kd, self.btn_reset]
+        return [self.slider_kp, self.slider_ki, self.slider_kd, self.btn_reset]
 
     def get_charts_data(self):
         return {
@@ -150,11 +162,7 @@ class BallAndPlateSystem(BaseSystem):
                 {"data": list(self.hist_sp_y), "color": (80, 220, 120)},
                 {"data": list(self.hist_pv_y), "color": (200, 100, 255)},
             ],
-            "angles_chart": [
-                {"data": list(self.hist_roll), "color": (255, 90, 90)},
-                {"data": list(self.hist_pitch), "color": (180, 130, 255)},
-            ],
-            # Zwracanie danych sterowania dla panelu GUI
+            # Zwracanie danych sterowania dla panelu GUI (usunięto wykres kątów)
             "u_chart": [
                 {"data": list(self.hist_u_pitch), "color": (255, 140, 0)},
                 {"data": list(self.hist_u_roll), "color": (0, 220, 220)},
@@ -177,8 +185,8 @@ class BallAndPlateSystem(BaseSystem):
             self.plate_pitch = max(-20.0, min(20.0, filtered_pitch))
 
     def step(self, dt):
-        # Synchronizacja parametrów regulatora z wartościami ze suwaków
-        self.update_params(self.slider_kp.val, self.slider_kd.val)
+        # Synchronizacja parametrów regulatora z wartościami z suwaków
+        self.update_params(self.slider_kp.val, self.slider_ki.val, self.slider_kd.val)
 
         if dt <= 0.0001:
             return self.plate_roll, self.plate_pitch
@@ -188,7 +196,7 @@ class BallAndPlateSystem(BaseSystem):
             target_pitch = -self.pid_x.update(self.setpoint_x, self.ball_pos[0], dt)
             target_roll = self.pid_y.update(self.setpoint_y, self.ball_pos[1], dt)
 
-            # Zapisanie niewycętych/surowych sygnałów sterujących lub z ograniczeniem
+            # Zapisanie sygnałów sterujących z ograniczeniem wychylenia płyty
             u_pitch = max(-18.0, min(18.0, target_pitch))
             u_roll = max(-18.0, min(18.0, target_roll))
 
@@ -225,8 +233,6 @@ class BallAndPlateSystem(BaseSystem):
         self.hist_pv_x.append(self.ball_pos[0])
         self.hist_sp_y.append(self.setpoint_y)
         self.hist_pv_y.append(self.ball_pos[1])
-        self.hist_roll.append(self.plate_roll)
-        self.hist_pitch.append(self.plate_pitch)
 
         # 4. AKTUALIZACJA STATUSU
         self.update_status()
