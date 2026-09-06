@@ -25,10 +25,10 @@
 
 ## 📌 Things to Do 
 
-- [ ] **Correct Objects Models**
 - [ ] **Tune controllers and add new ones (e.g., Swing-up for Furuta)**
-- [ ] **Translate UI & Comments to English**
-- [ ] **Code Refactoring & Cleanup**
+- [ ] **Trajectory Tracking**
+- [ ] **Disturbance Injector**
+- [ ] **Add new control systems**
 
 ---
 
@@ -67,12 +67,27 @@
 
 ---
 
+## 🔌 Hardware Setup & Pinout
+
+To run in **Hardware-in-the-Loop (HIL)** mode, connect the MPU6050 IMU to the ESP32 via I2C:
+
+| MPU6050 Pin | ESP32 GPIO | Description |
+| :---: | :---: | :--- |
+| **VCC** | 3.3V | Power Supply |
+| **GND** | GND | Ground |
+| **SCL** | GPIO 22 | I2C Clock |
+| **SDA** | GPIO 21 | I2C Data |
+
+---
+
 ## 🛠️ Project Architecture
 
 ```text
 ESP32_IMU_Control_App/
 │
-├── lib/                         # Custom MPU6050 driver library
+├── assets/                      # Demo of App
+├── documentation/               # Mathematical, Physical, and Control Documentation
+├── lib/                         # Custom MPU6050 driver library with Kalman Filter
 ├── src/                         # [C++] ESP32 firmware source code
 │   └── main.cpp                 # Reads MPU6050 telemetry & streams formatted data over UART
 ├── platformio.ini               # PlatformIO environment & dependency settings
@@ -80,24 +95,9 @@ ESP32_IMU_Control_App/
 ├── logs/                        # Automatically generated CSV telemetry logs
 │
 ├── python_app/                  # [Python] Simulation engine & 3D renderer
-│   ├── models/                  # Physics engines and mathematical models
-│   │   ├── base_system.py
-│   │   ├── ball_and_plate_system.py
-│   │   ├── crane_system.py
-│   │   ├── furuta_system.py
-│   │   ├── quadrocopter_system.py
-│   │   └── satellite_system.py   # Satellite model with full PID (Kp, Ki, Kd)
-│   │
+│   ├── models/                  # Physics engines and mathematical models 
 │   ├── ui/                      # GUI, HUD elements, charts, and 3D overlay widgets
-│   │   ├── charts.py
-│   │   ├── renderer_charts.py
-│   │   ├── renderer_3d.py
-│   │   ├── setpoint_panel.py
-│   │   └── widgets.py
-│   │
 │   ├── utils/                   # Data processing and analysis scripts
-│   │   ├── data_logger.py       # Real-time CSV recorder class
-│   │   └── plot_csv.py          # Standalone Matplotlib plot generator
 │   │
 │   ├── config.py                # Global parameters, target FPS, and COM configuration
 │   ├── serial_handler.py        # UART serial communication manager
@@ -115,10 +115,10 @@ ESP32_IMU_Control_App/
 ## 📦 Requirements & Installation
 
 ### 1. Python Environment
-Requires Python 3.10+.
+Requires **Python 3.10+**.
 
 Install all necessary libraries:
-```text
+```bash
 pip install -r requirements.txt
 ```
 
@@ -133,15 +133,15 @@ pip install -r requirements.txt
 
 1. Ensure the correct serial port is specified in python_app/config.py (e.g., COM8 or /dev/ttyUSB0).
 2. Run the main simulation app:
-```text
+```bash
 cd python_app
 python main.py
 ```
 
 3. Plotting Logged Data:
    After recording data during a simulation session, run the automated visualization script:
-```text
-python utils/plot_csv.py
+```bash
+python python_app/utils/plot_csv.py
 ```
 
 ---
@@ -152,6 +152,20 @@ python utils/plot_csv.py
 * Mouse (LMB): Set target positions directly on the 3D viewport or adjust PID sliders (Kp, Ki, Kd) on the control panel.
 * SPACE: Reset current system state and clear target position.
 * ESC: Return to the main simulation selection menu.
+
+
+---
+
+## 📚 Technical Documentation
+
+A comprehensive mathematical, physical, and control theoretical documentation for all implemented systems is available in PDF format:
+
+📄 **[Control Systems Technical Report](documentation/control_system_report.pdf)**
+
+### Documentation Coverage:
+* **Rigorous Mathematical Derivations:** Full Euler-Lagrange kinetic and dynamic equations of motion for all 5 testbeds.
+* **Control Theory Analysis:** State-space models, linear state-feedback design, dual-loop cascade structures, and anti-windup architectures.
+* **System Identification & Parameters:** Explicit tables listing physical masses, inertia matrices, friction terms, and operational constraints.
 
 ---
 
