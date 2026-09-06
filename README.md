@@ -160,7 +160,7 @@ python python_app/utils/plot_csv.py
 
 A comprehensive mathematical, physical, and control theoretical documentation for all implemented systems is available in PDF format:
 
-📄 **[Control Systems Technical Report](documentation/control_system_report.pdf)**
+📄 **[Control Systems Technical Report](documentation/Control_system_report.pdf)**
 
 ### Documentation Coverage:
 * **Rigorous Mathematical Derivations:** Full Euler-Lagrange kinetic and dynamic equations of motion for all 5 testbeds.
