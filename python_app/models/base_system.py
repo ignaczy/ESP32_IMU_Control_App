@@ -3,30 +3,30 @@ from abc import ABC, abstractmethod
 class BaseSystem(ABC):
     @abstractmethod
     def reset(self):
-        """Resetuje stan układu do wartości początkowych."""
+        """Resets the system state to initial values."""
         pass
 
     @abstractmethod
     def step(self, dt):
-        """Wykonuje krok fizyki i oblicza sygnał sterujący."""
+        """Executes a physics step and calculates the control signal."""
         pass
 
     @abstractmethod
     def draw_3d(self):
-        """Rysuje obiekt w oknie OpenGL."""
+        """Renders the object in the OpenGL window."""
         pass
 
     @abstractmethod
     def get_widgets(self):
-        """Zwraca listę widgetów UI (suwaki, przyciski) specyficznych dla tego układu."""
+        """Returns a list of UI widgets (sliders, buttons) specific to this system."""
         pass
 
     @abstractmethod
     def get_charts_data(self):
-        """Zwraca słownik danych potrzebnych do wygenerowania wykresów w UI."""
+        """Returns a dictionary of data required to generate charts in the UI."""
         pass
 
     @abstractmethod
     def set_target_from_input(self, norm_x):
-        """Ustawia zadany punkt (setpoint) na podstawie kliknięcia myszą w scenie 3D."""
+        """Sets the desired setpoint based on a mouse click in the 3D scene."""
         pass

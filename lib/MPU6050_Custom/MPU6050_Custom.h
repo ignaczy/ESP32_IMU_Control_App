@@ -19,7 +19,7 @@ private:
     KalmanState _kalmanRoll;
     KalmanState _kalmanPitch;
 
-    // Parametry szumu filtra Kalmana
+    // Kalman filter noise parameters
     const float _Q_angle = 0.001f;
     const float _Q_bias = 0.003f;
     const float _R_measure = 0.03f;

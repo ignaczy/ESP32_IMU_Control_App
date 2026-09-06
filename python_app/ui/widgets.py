@@ -13,21 +13,21 @@ class Slider:
         self.val = self._snap(initial_val)
 
     def _snap(self, val):
-        """Zaokrągla wartość suwaka do zadanego kroku."""
+        """Rounds the slider value to the specified step."""
         snapped = round((val - self.min_val) / self.step) * self.step + self.min_val
         return max(self.min_val, min(self.max_val, snapped))
 
     def draw(self, surface, font):
-        # Tło suwaka
+        # Slider background
         pygame.draw.rect(surface, (45, 52, 70), self.rect, border_radius=4)
         
-        # Uchwyt suwaka
+        # Slider handle
         norm_pos = (self.val - self.min_val) / (self.max_val - self.min_val) if self.max_val != self.min_val else 0
         handle_x = self.rect.x + int(norm_pos * self.rect.w)
         handle_rect = pygame.Rect(handle_x - 6, self.rect.y - 3, 12, self.rect.h + 6)
         pygame.draw.rect(surface, config.COLOR_SLIDER_HANDLE, handle_rect, border_radius=4)
 
-        # Etykieta z wartością
+        # Label with value
         txt = font.render(f"{self.label}: {self.val:.2f}", True, config.COLOR_TEXT)
         surface.blit(txt, (self.rect.x, self.rect.y - 16))
 
@@ -72,7 +72,7 @@ class Button:
 
 
 def draw_chart(surface, rect, font, title, y_min, y_max, data_series):
-    """Rysuje wykres liniowy w czasie rzeczywistym dla podanych serii danych."""
+    """Draws a real-time line chart for the given data series."""
     pygame.draw.rect(surface, config.COLOR_PANEL_BG, rect, border_radius=6)
     pygame.draw.rect(surface, config.COLOR_PANEL_BORDER, rect, width=1, border_radius=6)
 
@@ -84,7 +84,7 @@ def draw_chart(surface, rect, font, title, y_min, y_max, data_series):
     ax_w = rect.w - 48
     ax_h = rect.h - 30
 
-    # Linie siatki
+    # Grid lines
     for i in range(3):
         gy = ax_y + ax_h * (i / 2.0)
         val = y_max - (i / 2.0) * (y_max - y_min)
@@ -94,7 +94,7 @@ def draw_chart(surface, rect, font, title, y_min, y_max, data_series):
 
     pygame.draw.rect(surface, (90, 102, 130), (ax_x, ax_y, ax_w, ax_h), 1)
 
-    # Rysowanie serii danych
+    # Drawing data series
     for series in data_series:
         data = series["data"]
         color = series["color"]
@@ -110,7 +110,7 @@ def draw_chart(surface, rect, font, title, y_min, y_max, data_series):
             pygame.draw.aalines(surface, color, False, pts)
 
 class TextInput:
-    """Prosty widget pola tekstowego do wprowadzania wartości."""
+    """Simple text field widget for value input."""
     def __init__(self, x, y, width, height, label="", default_text="0.00"):
         self.rect = pygame.Rect(x, y, width, height)
         self.text = str(default_text)
@@ -122,33 +122,33 @@ class TextInput:
         self.text_color = (255, 255, 255)
 
     def handle_event(self, event):
-        """Obsługuje kliknięcia myszą oraz wpisywanie z klawiatury. Zwraca True przy wciśnięciu Enter."""
+        """Handles mouse clicks and keyboard typing. Returns True when Enter is pressed."""
         if event.type == pygame.MOUSEBUTTONDOWN:
-            # Aktywuj pole jeśli kliknięto w jego obszarze
+            # Activate the field if clicked inside its area
             self.active = self.rect.collidepoint(event.pos)
             return False
 
         if event.type == pygame.KEYDOWN and self.active:
             if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
                 self.active = False
-                return True  # Wciśnięto ENTER (zatwierdzenie)
+                return True  # ENTER pressed (confirmation)
             elif event.key == pygame.K_BACKSPACE:
                 self.text = self.text[:-1]
             else:
-                # Akceptuj tylko cyfry, kropkę, minus
+                # Accept only digits, period, and minus sign
                 if event.unicode in "0123456789.-":
                     self.text += event.unicode
         return False
 
     def get_value(self):
-        """Zwraca sparsowaną wartość float lub None jeśli wpisany tekst jest niepoprawny."""
+        """Returns the parsed float value or None if the entered text is invalid."""
         try:
             return float(self.text)
         except ValueError:
             return None
 
     def draw(self, surface, font):
-        # Etykieta nad polem z mniejszym rozmiarem lub mniejszym offsetem
+        # Label above the field with a smaller size or offset
         if self.label:
             label_surf = font.render(self.label, True, (160, 160, 170))
             surface.blit(label_surf, (self.rect.x, self.rect.y - 14))

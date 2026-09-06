@@ -3,14 +3,14 @@ from ui.widgets import Button, TextInput
 
 
 class CustomTextInput(TextInput):
-    """Rozszerzenie TextInput o automatyczne czyszczenie zawartości przy kliknięciu."""
+    """Extension of TextInput featuring automatic content clearing upon click."""
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
             if hasattr(self, "rect") and self.rect.collidepoint(event.pos):
                 if not getattr(self, "active", False):
                     self.active = True
-                    self.text = ""  # Czyszczenie tekstu przy kliknięciu
+                    self.text = ""  # Clear text on click
                     return False
             else:
                 self.active = False
@@ -20,7 +20,7 @@ class CustomTextInput(TextInput):
 
 class SetpointPanel:
     """
-    Uniwersalny panel Setpoint do wprowadzania wartości zadanych oraz zmiany trybu sterowania.
+    Universal Setpoint panel for entering setpoint values and changing the control mode.
     """
 
     MODES = ["MANUAL", "IMU", "MOUSE"]
@@ -37,11 +37,11 @@ class SetpointPanel:
         self.btn_height = 28
         self.btn_width = 130
 
-        # Tworzenie przycisku trybu
+        # Create mode button
         self.btn_mode = Button(x, y, self.btn_width, self.btn_height, self.current_mode)
-        self.btn_send = Button(x + 140, y, 90, self.btn_height, "WYŚLIJ")
+        self.btn_send = Button(x + 140, y, 90, self.btn_height, "SEND")
 
-        # Pola tekstowe z odpowiednim odstępem pionowym
+        # Text input fields with proper vertical spacing
         row2_y = y + 52
         box_w = 100
 
@@ -57,11 +57,11 @@ class SetpointPanel:
         return self.MODES[self.current_mode_idx]
 
     def _update_button_label(self):
-        """Przebudowuje przycisk lub aktualizuje jego napis w zależności od budowy klasy Button."""
+        """Rebuilds the button or updates its text depending on the Button class implementation."""
         if hasattr(self.btn_mode, "set_text"):
             self.btn_mode.set_text(self.current_mode)
         else:
-            # Jeśli Button nie ma set_text, podmieniamy cały obiekt przycisku, co wymusza przerenderowanie naciśniętego napisu
+            # If Button does not have set_text, replace the whole button object, forcing the updated label to render
             self.btn_mode = Button(self.x, self.y, self.btn_width, self.btn_height, self.current_mode)
 
     def set_callback(self, callback):
@@ -85,11 +85,11 @@ class SetpointPanel:
                 self.input2.text = f"{val2:.2f}"
 
     def handle_event(self, event):
-        # 1. Kliknięcie w przycisk trybu (MODE)
+        # 1. Click on mode button (MODE)
         if event.type == pygame.MOUSEBUTTONDOWN:
             if hasattr(self.btn_mode, "rect") and self.btn_mode.rect.collidepoint(event.pos):
                 self.current_mode_idx = (self.current_mode_idx + 1) % len(self.MODES)
-                self._update_button_label()  # wymuszenie zmiany napisu
+                self._update_button_label()  # Force label update
                 
                 if self.on_mode_change_callback:
                     self.on_mode_change_callback(self.current_mode)
@@ -104,7 +104,7 @@ class SetpointPanel:
                     self.on_apply_callback()
                 return True
 
-        # 2. Przekazanie zdarzenia do pól tekstowych
+        # 2. Forward event to text input fields
         enter1 = self.input1.handle_event(event)
         enter2 = self.input2.handle_event(event) if self.num_inputs == 2 and self.input2 else False
 

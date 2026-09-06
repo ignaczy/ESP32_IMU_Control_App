@@ -11,21 +11,21 @@ class DataLogger:
         self.headers = []
 
     def start_recording(self, current_time):
-        """Rozpoczyna nagrywanie danych."""
+        """Starts recording telemetry data."""
         self.is_recording = True
         self.recorded_data.clear()
         self.start_time = current_time
 
     def stop_and_save(self, system_name="system") -> str:
         """
-        Zatrzymuje nagrywanie i zapisuje zebrane dane do pliku CSV.
-        Zwraca ścieżkę do zapisanego pliku lub None w przypadku braku danych.
+        Stops recording and saves collected telemetry data to a CSV file.
+        Returns the file path or None if no data was collected.
         """
         self.is_recording = False
         if not self.recorded_data or not self.headers:
             return None
 
-        # Ścieżka do folderu logs w głównym katalogu projektu
+        # Path to the logs directory in the project root folder
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         logs_dir = os.path.join(base_dir, "logs")
         os.makedirs(logs_dir, exist_ok=True)
@@ -38,14 +38,14 @@ class DataLogger:
                 writer = csv.writer(file)
                 writer.writerow(self.headers)
                 writer.writerows(self.recorded_data)
-            print(f"[DataLogger] Dane zostały zapisane do pliku: {filename}")
+            print(f"[DataLogger] Data successfully saved to: {filename}")
             return filename
         except Exception as e:
-            print(f"[DataLogger] Błąd podczas zapisu CSV: {e}")
+            print(f"[DataLogger] Error saving CSV: {e}")
             return None
 
     def _extract_numeric_val(self, item):
-        """Pomocnicza funkcja wyciągająca ostatnią wartość numeryczną ze słownika/listy."""
+        """Helper function extracting the latest numeric value from a dict/list/tuple."""
         if isinstance(item, dict):
             buf = item.get("data", [])
             item = buf[-1] if len(buf) > 0 else 0.0
@@ -59,13 +59,13 @@ class DataLogger:
             return None
 
     def _is_valid_chart_key(self, key: str) -> bool:
-        """Sprawdza, czy dany klucz odpowiada właściwym danym wykresu, a nie metadanym UI."""
+        """Checks if a given key corresponds to valid chart telemetry rather than UI metadata."""
         ignored_keywords = ["status", "color", "title", "text"]
         key_lower = str(key).lower()
         return not any(kw in key_lower for kw in ignored_keywords)
 
     def sample(self, current_time, system):
-        """Pobiera pojedynczą próbkę stanu systemu, jeśli nagrywanie jest aktywne."""
+        """Samples a single state point from the system if recording is active."""
         if not self.is_recording:
             return
 
@@ -75,7 +75,7 @@ class DataLogger:
         if hasattr(system, "get_charts_data"):
             charts_data = system.get_charts_data()
 
-            # 1. Budowanie nagłówków przy pierwszej próbce (z pominięciem kluczy statusu/koloru)
+            # 1. Dynamically build headers on the first sample (skipping status/color keys)
             if not self.headers:
                 self.headers = ["Time [s]"]
                 for chart_key, series_list in charts_data.items():
@@ -92,7 +92,7 @@ class DataLogger:
                         if val is not None:
                             self.headers.append(f"{chart_key}")
 
-            # 2. Pobieranie wartości dla właściwych kolumn
+            # 2. Extract values for valid chart columns
             for chart_key, series_list in charts_data.items():
                 if not self._is_valid_chart_key(chart_key):
                     continue

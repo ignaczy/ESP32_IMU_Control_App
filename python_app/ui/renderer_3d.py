@@ -4,31 +4,31 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from ui.gl_utils import draw_box, draw_cylinder, draw_grid
 
-# Statyczne tło gwiazd generowane raz przy imporcie modułu
+# Static star background generated once when importing the module
 STARS = [(random.uniform(-10, 10), random.uniform(-10, 10), random.uniform(-8, -2)) for _ in range(150)]
 
 
 def apply_material(diffuse, specular=[0.0, 0.0, 0.0, 1.0], shininess=0.0):
-    """Pomocnicza funkcja do nakładania właściwości materiału OpenGL."""
+    """Helper function to apply OpenGL material properties."""
     glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, diffuse)
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specular)
     glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, shininess)
 
 
 def draw_styled_cylinder(quad, radius, height, slices=32):
-    """Rysuje gładki walec z zaślepkami i przeliczonymi wektorami normalnymi."""
+    """Renders a smooth cylinder with end caps and computed normal vectors."""
     gluQuadricNormals(quad, GLU_SMOOTH)
     
-    # Boki walca
+    # Cylinder sides
     gluCylinder(quad, radius, radius, height, slices, 1)
     
-    # Zaślepka dolna
+    # Bottom cap
     glPushMatrix()
     glRotatef(180, 1, 0, 0)
     gluDisk(quad, 0, radius, slices, 1)
     glPopMatrix()
     
-    # Zaślepka górna
+    # Top cap
     glPushMatrix()
     glTranslatef(0.0, 0.0, height)
     gluDisk(quad, 0, radius, slices, 1)
@@ -37,26 +37,26 @@ def draw_styled_cylinder(quad, radius, height, slices=32):
 
 def draw_furuta_3d(furuta, setpoint_arm):
     
-    # 1. Siatka podłoża
+    # 1. Ground grid
     draw_grid(size=10, spacing=0.2, z_offset=-0.45)
 
-    # 2. Oświetlenie sceny
+    # 2. Scene lighting
     glEnable(GL_LIGHTING)
     glEnable(GL_LIGHT0)
     glEnable(GL_LIGHT1)
     glEnable(GL_COLOR_MATERIAL)
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
 
-    # Subtelne odbicie światła na powierzchniach
+    # Subtle light reflection on surfaces
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.5, 0.5, 0.5, 1.0])
     glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 20.0)
 
-    # Światło główne (z góry i z prawej)
+    # Main light (top and right)
     glLightfv(GL_LIGHT0, GL_POSITION, [2.5, 4.0, 3.0, 1.0])
     glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.95, 0.95, 0.9, 1.0])
     glLightfv(GL_LIGHT0, GL_AMBIENT, [0.25, 0.25, 0.3, 1.0])
 
-    # Światło wypełniające (z lewej - doświetla cienie silnika)
+    # Fill light (left - fills motor shadows)
     glLightfv(GL_LIGHT1, GL_POSITION, [-3.0, 2.0, -2.0, 1.0])
     glLightfv(GL_LIGHT1, GL_DIFFUSE, [0.25, 0.3, 0.35, 1.0])
 
@@ -64,7 +64,7 @@ def draw_furuta_3d(furuta, setpoint_arm):
     gluQuadricNormals(quad, GLU_SMOOTH)
 
     # ---------------------------------------------------------
-    # 3. PODSTAWA
+    # 3. BASE
     # ---------------------------------------------------------
     glPushMatrix()
     glTranslatef(0.0, -0.4, 0.0)
@@ -73,7 +73,7 @@ def draw_furuta_3d(furuta, setpoint_arm):
     glPopMatrix()
 
     # ---------------------------------------------------------
-    # 4. KORPUS SILNIKA
+    # 4. MOTOR HOUSING
     # ---------------------------------------------------------
     glPushMatrix()
     glTranslatef(0.0, -0.36, 0.0)
@@ -83,7 +83,7 @@ def draw_furuta_3d(furuta, setpoint_arm):
     glPopMatrix()
 
     # ---------------------------------------------------------
-    # 5. WSKAŹNIK SETPOINT
+    # 5. SETPOINT INDICATOR
     # ---------------------------------------------------------
     glPushMatrix()
     glRotatef(math.degrees(setpoint_arm) - 90, 0, 1, 0)
@@ -95,7 +95,7 @@ def draw_furuta_3d(furuta, setpoint_arm):
     glPopMatrix()
 
     # ---------------------------------------------------------
-    # 6. RAMIĘ POZIOME
+    # 6. HORIZONTAL ARM
     # ---------------------------------------------------------
     glPushMatrix()
     glRotatef(math.degrees(furuta.theta1) - 90, 0, 1, 0)
@@ -107,7 +107,7 @@ def draw_furuta_3d(furuta, setpoint_arm):
     glPopMatrix()
 
     # ---------------------------------------------------------
-    # 7. PRZEGUB WAHADŁA
+    # 7. PENDULUM JOINT
     # ---------------------------------------------------------
     glTranslatef(furuta.L_r, 0.0, 0.0)
     glPushMatrix()
@@ -117,17 +117,17 @@ def draw_furuta_3d(furuta, setpoint_arm):
     glPopMatrix()
 
     # ---------------------------------------------------------
-    # 8. WAHADŁO PIONOWE I CIĘŻAREK
+    # 8. VERTICAL PENDULUM AND WEIGHT
     # ---------------------------------------------------------
     glRotatef(math.degrees(furuta.theta2), 1, 0, 0)
     glPushMatrix()
     glRotatef(-90, 1, 0, 0)
     
-    # Pręt wahadła
+    # Pendulum rod
     glColor3f(0.95, 0.95, 0.95)
     draw_cylinder(0.02, furuta.L_p)
     
-    # Kula na końcu wahadła (gładka sfera bez przebarwień)
+    # Ball at the end of the pendulum (smooth sphere without discoloration)
     glTranslatef(0.0, 0.0, furuta.L_p)
     glColor3f(0.9, 0.7, 0.1)
     gluSphere(quad, 0.035, 24, 24)
@@ -135,22 +135,22 @@ def draw_furuta_3d(furuta, setpoint_arm):
     glPopMatrix()
     glPopMatrix()
 
-    # Sprzątanie
+    # Cleanup
     gluDeleteQuadric(quad)
     glDisable(GL_LIGHTING)
 
 def draw_crane_scene(crane, target_x):
-    """Rysuje model 3D Suwnicy / Dźwigu."""
+    """Renders the Overhead Crane / Crane 3D model."""
     draw_grid(size=20, spacing=0.2, z_offset=-1.0)
 
-    # Belka suwnicy
+    # Crane girder / beam
     glColor3f(0.4, 0.45, 0.55)
     glPushMatrix()
     glTranslatef(0.0, 1.0, 0.0)
     draw_box(4.6, 0.08, 0.08)
     glPopMatrix()
 
-    # Linia Celu (SP)
+    # Target line (SP)
     glDisable(GL_LIGHTING)
     glColor3f(0.1, 0.9, 0.4)
     glLineWidth(2)
@@ -160,13 +160,13 @@ def draw_crane_scene(crane, target_x):
     glEnd()
     glEnable(GL_LIGHTING)
 
-    # Wózek
+    # Trolley / Cart
     glPushMatrix()
     glTranslatef(crane.x, 1.0, 0.0)
     glColor3f(0.85, 0.45, 0.15)
     draw_box(0.5, 0.25, 0.3)
 
-    # Lina i Ładunek
+    # Cable and Load
     load_x = crane.length * math.sin(crane.theta)
     load_y = -crane.length * math.cos(crane.theta)
 
@@ -179,7 +179,7 @@ def draw_crane_scene(crane, target_x):
     glEnd()
     glEnable(GL_LIGHTING)
 
-    # Masa ładunku
+    # Load mass
     glTranslatef(load_x, load_y, 0.0)
     glColor3f(0.85, 0.2, 0.2)
     quad = gluNewQuadric()
@@ -191,7 +191,7 @@ def draw_crane_scene(crane, target_x):
 
 
 def draw_quadrocopter_scene(drone):
-    """Rysuje drona w układzie współrzędnych Z-Up."""
+    """Renders the drone in a Z-Up coordinate system."""
     draw_grid(size=20, spacing=0.2, z_offset=0.0)
 
     target_x = getattr(drone, 'setpoint_x', 0.0)
@@ -226,14 +226,14 @@ def draw_quadrocopter_scene(drone):
     glRotatef(math.degrees(phi), 0, 1, 0)
     glRotatef(math.degrees(-theta), 1, 0, 0)
 
-    # Korpus główny
+    # Main frame
     glPushMatrix()
     glScalef(0.08, 0.08, 0.01)
     glColor3f(1.0, 0.5, 0.0)
     draw_box(2.0, 2.0, 2.0)
     glPopMatrix()
 
-    # Centralny akcent
+    # Center accent
     glPushMatrix()
     glTranslatef(0.0, 0.0, 0.012)
     glScalef(0.04, 0.04, 0.003)
@@ -241,7 +241,7 @@ def draw_quadrocopter_scene(drone):
     draw_box(2.0, 2.0, 2.0)
     glPopMatrix()
 
-    # Bateria
+    # Battery
     glPushMatrix()
     glTranslatef(0.0, 0.0, -0.015)
     glScalef(0.045, 0.065, 0.01)
@@ -295,7 +295,7 @@ def draw_quadrocopter_scene(drone):
 
 
 def draw_ball_and_plate_scene(system):
-    """Rysuje układ Piłka na Płytce (Ball & Plate)."""
+    """Renders the Ball and Plate system."""
     draw_grid(size=20, spacing=0.2, z_offset=0.0)
 
     glPushMatrix()
@@ -365,10 +365,10 @@ def draw_ball_and_plate_scene(system):
     glPopMatrix()
 
 
-# --- ELEMENTY RYSOWANIA DLA SATELITY ---
+# --- DRAWING ELEMENTS FOR SATELLITE ---
 
 def _draw_space_background():
-    """Rysuje gwieździste tło oraz tarcze orientacyjne."""
+    """Renders the starry background and orientation dials."""
     glDisable(GL_LIGHTING)
     glPointSize(1.5)
     glBegin(GL_POINTS)
@@ -391,7 +391,7 @@ def _draw_space_background():
 
 
 def _draw_target_indicator(angle):
-    """Rysuje żółty wektor celu orientacji."""
+    """Renders the yellow target orientation vector."""
     glPushMatrix()
     glRotatef(math.degrees(angle), 0, 0, 1)
     glDisable(GL_LIGHTING)
@@ -412,7 +412,7 @@ def _draw_target_indicator(angle):
 
 
 def _draw_solar_panel():
-    """Rysuje pojedynczy panel słoneczny."""
+    """Renders a single solar panel."""
     apply_material([0.15, 0.15, 0.18, 1.0], [0.5, 0.5, 0.5, 1.0], 20.0)
     draw_box(1.4, 0.65, 0.04)
 
@@ -429,7 +429,7 @@ def _draw_solar_panel():
 
 
 def draw_satellite_scene(sat):
-    """Rysuje model 3D Satelity z Kołem Reakcyjnym."""
+    """Renders the 3D Satellite with Reaction Wheel model."""
     glDisable(GL_COLOR_MATERIAL)
     glEnable(GL_LIGHTING)
     glEnable(GL_LIGHT0)
@@ -449,15 +449,15 @@ def draw_satellite_scene(sat):
     quad = gluNewQuadric()
     gluQuadricNormals(quad, GLU_SMOOTH)
 
-    # 1. Główny korpus
+    # 1. Main body
     apply_material([0.25, 0.27, 0.3, 1.0], [0.8, 0.8, 0.9, 1.0], 50.0)
     draw_box(0.9, 0.9, 0.5)
 
-    # 2. Złota osłona termiczna (MLI)
+    # 2. Gold thermal insulation (MLI)
     apply_material([0.9, 0.7, 0.1, 1.0], [1.0, 0.9, 0.4, 1.0], 90.0)
     draw_box(0.92, 0.4, 0.52)
 
-    # 3. Panele słoneczne
+    # 3. Solar panels
     glPushMatrix()
     glTranslatef(-1.25, 0, 0)
     _draw_solar_panel()
@@ -468,7 +468,7 @@ def draw_satellite_scene(sat):
     _draw_solar_panel()
     glPopMatrix()
 
-    # 4. Wysięgniki paneli
+    # 4. Panel booms / struts
     apply_material([0.6, 0.6, 0.65, 1.0], [0.9, 0.9, 0.9, 1.0], 30.0)
     for side in [-1, 1]:
         glPushMatrix()
@@ -477,7 +477,7 @@ def draw_satellite_scene(sat):
         gluCylinder(quad, 0.025, 0.025, 0.1, 12, 1)
         glPopMatrix()
 
-    # 5. Przód Satelity (Optyka / Sensor)
+    # 5. Satellite Front (Optics / Sensor)
     glPushMatrix()
     glTranslatef(0.46, 0.0, 0.0)
     apply_material([0.8, 0.1, 0.1, 1.0], [1.0, 0.5, 0.5, 1.0], 60.0)
@@ -490,7 +490,7 @@ def draw_satellite_scene(sat):
     gluDisk(quad, 0, 0.1, 16, 1)
     glPopMatrix()
 
-    # 6. Tył Satelity - Antena
+    # 6. Satellite Back - Antenna
     glPushMatrix()
     glTranslatef(-0.46, 0, 0)
     glRotatef(-90, 0, 1, 0)
@@ -498,7 +498,7 @@ def draw_satellite_scene(sat):
     gluCylinder(quad, 0.02, 0.18, 0.12, 16, 1)
     glPopMatrix()
 
-    # 7. Koło Reakcyjne
+    # 7. Reaction Wheel
     glPushMatrix()
     glTranslatef(0, 0, 0.25)
 

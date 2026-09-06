@@ -8,8 +8,8 @@ void setup() {
     Serial.begin(115200);
     while (!Serial);
 
-    if (!mpu.begin(21, 22)) { // Domyślne piny I2C dla ESP32: SDA=21, SCL=22
-        Serial.println("Błąd inicjalizacji MPU6050!");
+    if (!mpu.begin(21, 22)) { // Default I2C pins for ESP32: SDA=21, SCL=22
+        Serial.println("MPU6050 initialization failed!");
         while (1) { delay(10); }
     }
     
@@ -26,11 +26,11 @@ void loop() {
 
     mpu.update(dt, roll, pitch);
 
-    // Wysyłanie po UART w formacie czytelnym dla wizualizatora
+    // Stream over UART in a human-readable format for the 3D visualizer
     Serial.print("ROLL:");
     Serial.print(roll, 2);
     Serial.print(",PITCH:");
     Serial.println(pitch, 2);
 
-    delay(10); // Częstotliwość pętli ok. 100Hz
+    delay(10); // Loop rate approximately 100Hz
 }

@@ -42,7 +42,7 @@ class QuadrocopterSystem(BaseSystem):
         super().__init__()
         self.config = config
 
-        # Pobieranie parametrów z konfiguracji
+        # Retrieve parameters from configuration
         quad_params = getattr(config, 'QUAD_PARAMS', {})
         pid_config = getattr(config, 'PID_QUAD_CONFIG', {})
 
@@ -57,17 +57,17 @@ class QuadrocopterSystem(BaseSystem):
         self.pid_x = SafePID(Kp=self.Kp, Ki=self.Ki, Kd=self.Kd, limit=self.pid_limit)
         self.pid_y = SafePID(Kp=self.Kp, Ki=self.Ki, Kd=self.Kd, limit=self.pid_limit)
 
-        # WIDGETY UI (lekko obniżone i z suwakiem Ki)
+        # UI WIDGETS (slightly lowered and with Ki slider)
         self.slider_kp = Slider(20, 50, 220, 12, 0.0, 20.0, self.Kp, "Kp")
         self.slider_ki = Slider(20, 80, 220, 12, 0.0, 5.0, self.Ki, "Ki")
         self.slider_kd = Slider(20, 110, 220, 12, 0.0, 10.0, self.Kd, "Kd")
-        self.btn_reset = Button(20, 140, 220, 25, "RESET STANU (SPACE)")
+        self.btn_reset = Button(20, 140, 220, 25, "RESET STATE (SPACE)")
 
-        # ATRYBUTY STATUSU
+        # STATUS ATTRIBUTES
         self.status_text = "QUADROCOPTER ACTIVE"
         self.status_color = (0, 255, 100)
 
-        # BUFORY HISTORII DLA WYKRESÓW
+        # HISTORY BUFFERS FOR CHARTS
         self.MAX_HIST = 150
         self.hist_sp_x = deque(maxlen=self.MAX_HIST)
         self.hist_pv_x = deque(maxlen=self.MAX_HIST)
@@ -76,7 +76,7 @@ class QuadrocopterSystem(BaseSystem):
         self.hist_roll = deque(maxlen=self.MAX_HIST)
         self.hist_pitch = deque(maxlen=self.MAX_HIST)
         
-        # Bufory sygnałów sterujących
+        # Control signal buffers
         self.hist_u_roll = deque(maxlen=self.MAX_HIST)
         self.hist_u_pitch = deque(maxlen=self.MAX_HIST)
 
@@ -105,7 +105,7 @@ class QuadrocopterSystem(BaseSystem):
         self.hist_u_roll.clear()
         self.hist_u_pitch.clear()
 
-        # Wypełnienie domyślnymi zerami
+        # Fill with default zeros
         self.hist_sp_x.extend([0.0] * self.MAX_HIST)
         self.hist_pv_x.extend([0.0] * self.MAX_HIST)
         self.hist_sp_y.extend([0.0] * self.MAX_HIST)
@@ -129,7 +129,7 @@ class QuadrocopterSystem(BaseSystem):
         self.pid_x.Kd = self.pid_y.Kd = Kd
 
     def update_status(self):
-        """Aktualizuje atrybuty tekstu statusu."""
+        """Updates status text attributes."""
         self.status_text = f"QUADROCOPTER ACTIVE | Pos: X={self.pos[0]:.2f}m, Y={self.pos[1]:.2f}m"
         self.status_color = (0, 255, 100)
 
@@ -142,13 +142,13 @@ class QuadrocopterSystem(BaseSystem):
         self.setpoint_y = max(-2.0, min(2.0, (pitch / 45.0) * 2.0))
 
     def step(self, dt):
-        # Pobieranie wartości ze wszystkich 3 sliderów
+        # Fetch values from all 3 sliders
         self.update_params(self.slider_kp.val, self.slider_ki.val, self.slider_kd.val)
 
         if dt <= 0.0001:
             return math.degrees(self.phi), math.degrees(self.theta)
 
-        # Wyliczenie sygnałów sterujących (zadanych kątów przechylenia/pochylenia)
+        # Calculate control signals (desired roll/pitch angles)
         target_roll = self.pid_x.update(self.setpoint_x, self.pos[0], dt)
         target_pitch = self.pid_y.update(self.setpoint_y, self.pos[1], dt)
 
@@ -169,7 +169,7 @@ class QuadrocopterSystem(BaseSystem):
 
         self.prop_angle = (self.prop_angle + 1200 * dt) % 360
 
-        # Aktualizacja historii
+        # Update history
         self.hist_sp_x.append(self.setpoint_x)
         self.hist_pv_x.append(self.pos[0])
         self.hist_sp_y.append(self.setpoint_y)

@@ -6,10 +6,12 @@ from ui.widgets import Button, Slider
 
 
 def angle_difference(target, current):
+    """Calculates the minimal angular difference wrapped to [-pi, pi]."""
     return (target - current + math.pi) % (2 * math.pi) - math.pi
 
 
 def normalize_angle(angle):
+    """Normalizes an angle to the range [-pi, pi]."""
     return (angle + math.pi) % (2 * math.pi) - math.pi
 
 
@@ -67,8 +69,8 @@ class SatelliteSystem(BaseSystem):
         self.setpoint_angle = 0.0
         self.current_torque = 0.0
 
-        # Status wewnętrzny
-        self.status_text = ""
+        # Internal status
+        self.status_text = "SATELLITE ACTIVE"
         self.status_color = (0, 255, 100)
 
         self.max_hist = 150
@@ -77,17 +79,17 @@ class SatelliteSystem(BaseSystem):
         self.hist_wheel_speed = deque([0.0] * self.max_hist, maxlen=self.max_hist)
         self.hist_u = deque([0.0] * self.max_hist, maxlen=self.max_hist)
 
-        # Inicjalizacja Widgetów (dodano suwak Ki, przesunięto Kd oraz Button)
+        # Widget initialization (Ki slider added, Kd and Button moved down)
         self.slider_kp = Slider(20, 35, 220, 12, 0.0, 40.0, self.pid.Kp, "Kp")
         self.slider_ki = Slider(20, 70, 220, 12, 0.0, 10.0, self.pid.Ki, "Ki")
         self.slider_kd = Slider(20, 105, 220, 12, 0.0, 30.0, self.pid.Kd, "Kd")
-        self.btn_reset = Button(20, 135, 220, 25, "RESET STANU (SPACE)")
+        self.btn_reset = Button(20, 135, 220, 25, "RESET STATE (SPACE)")
 
         self.update_status()
 
     def update_status(self):
-        """Aktualizuje atrybuty statusu."""
-        self.status_text = f"Kat Satelity: {math.degrees(self.angle_sat):.1f} deg | Kola: {self.omega_wheel:.1f} rad/s"
+        """Updates status attributes."""
+        self.status_text = f"SATELLITE | Angle: {math.degrees(self.angle_sat):.1f} deg | Wheel: {self.omega_wheel:.1f} rad/s"
         self.status_color = (0, 255, 100)
 
     def reset_state(self):
@@ -126,7 +128,7 @@ class SatelliteSystem(BaseSystem):
         if dt <= 0.0001:
             return
 
-        # Aktualizacja parametrów regulatora z suwaków (w tym człon Ki)
+        # Update controller parameters from sliders (including Ki gain)
         self.update_params(self.slider_kp.val, self.slider_ki.val, self.slider_kd.val)
 
         self.current_torque = self.pid.compute(self.setpoint_angle, self.angle_sat, self.omega_sat, dt)

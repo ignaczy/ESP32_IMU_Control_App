@@ -5,7 +5,7 @@ import math
 
 def render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hist_data=None):
     """
-    Rysuje wykresy oraz wypisuje pojedynczy tekst statusu dokładnie pod ramką wykresu.
+    Renders the charts and prints a single status text line directly below the chart bounding box.
     """
     chart_rect = None
     status_text = ""
@@ -15,9 +15,9 @@ def render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hi
         charts_data = system.get_charts_data()
         
         charts = [
-            {"title": "Pozycja Wozka X [m]", "min_val": -2.0, "max_val": 2.0, "series": charts_data.get("pos_chart", [])},
-            {"title": "Kat Kolysania [deg]", "min_val": -30.0, "max_val": 30.0, "series": charts_data.get("sway_chart", [])},
-            {"title": "Sygnal Sterujacy F [N]", "min_val": -system.pid.max_force, "max_val": system.pid.max_force, "series": charts_data.get("u_chart", [])}
+            {"title": "Trolley Position X [m]", "min_val": -2.0, "max_val": 2.0, "series": charts_data.get("pos_chart", [])},
+            {"title": "Sway Angle [deg]", "min_val": -30.0, "max_val": 30.0, "series": charts_data.get("sway_chart", [])},
+            {"title": "Control Signal F [N]", "min_val": -system.pid.max_force, "max_val": system.pid.max_force, "series": charts_data.get("u_chart", [])}
         ]
         
         chart_rect = pygame.Rect(10, 270, config.PANEL_WIDTH - 20, 310)
@@ -29,9 +29,9 @@ def render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hi
         charts_data = system.get_charts_data()
         
         charts = [
-            {"title": "Pozycja X [m]", "min_val": -1.5, "max_val": 1.5, "series": charts_data.get("pos_x_chart", [])},
-            {"title": "Pozycja Y [m]", "min_val": -1.5, "max_val": 1.5, "series": charts_data.get("pos_y_chart", [])},
-            {"title": "Sygnal Sterujacy U [deg]", "min_val": -20.0, "max_val": 20.0, "series": charts_data.get("u_chart", [])}
+            {"title": "Position X [m]", "min_val": -1.5, "max_val": 1.5, "series": charts_data.get("pos_x_chart", [])},
+            {"title": "Position Y [m]", "min_val": -1.5, "max_val": 1.5, "series": charts_data.get("pos_y_chart", [])},
+            {"title": "Control Signal U [deg]", "min_val": -20.0, "max_val": 20.0, "series": charts_data.get("u_chart", [])}
         ]
         
         chart_rect = pygame.Rect(10, 180, config.PANEL_WIDTH - 20, 350)
@@ -45,9 +45,9 @@ def render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hi
         limit = getattr(system, "pid_limit", 15.0)
 
         charts = [
-            {"title": "Pozycja X [m]", "min_val": -2.0, "max_val": 2.0, "series": charts_data.get("pos_x_chart", [])},
-            {"title": "Pozycja Y [m]", "min_val": -2.0, "max_val": 2.0, "series": charts_data.get("pos_y_chart", [])},
-            {"title": "Sygnal Sterujacy U [deg]", "min_val": -limit, "max_val": limit, "series": charts_data.get("u_chart", [])}
+            {"title": "Position X [m]", "min_val": -2.0, "max_val": 2.0, "series": charts_data.get("pos_x_chart", [])},
+            {"title": "Position Y [m]", "min_val": -2.0, "max_val": 2.0, "series": charts_data.get("pos_y_chart", [])},
+            {"title": "Control Signal U [deg]", "min_val": -limit, "max_val": limit, "series": charts_data.get("u_chart", [])}
         ]
         
         chart_rect = pygame.Rect(10, 180, config.PANEL_WIDTH - 20, 350)
@@ -59,11 +59,11 @@ def render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hi
     elif selected_mode == "SATELLITE":
         charts_data = system.get_charts_data()
         charts = [
-            {"title": "Orientacja Satelity [deg]", "min_val": -180.0, "max_val": 180.0, "series": charts_data.get("satellite_chart", [])},
-            {"title": "Predkosc Kola Zamachowego [rad/s]", "min_val": -system.max_wheel_speed, "max_val": system.max_wheel_speed, "series": charts_data.get("wheel_chart", [])},
+            {"title": "Satellite Orientation [deg]", "min_val": -180.0, "max_val": 180.0, "series": charts_data.get("satellite_chart", [])},
+            {"title": "Flywheel Velocity [rad/s]", "min_val": -system.max_wheel_speed, "max_val": system.max_wheel_speed, "series": charts_data.get("wheel_chart", [])},
         ]
         if "u_chart" in charts_data:
-            charts.append({"title": "Moment Sterujacy M [Nm]", "min_val": -25.0, "max_val": 25.0, "series": charts_data["u_chart"]})
+            charts.append({"title": "Control Torque M [Nm]", "min_val": -25.0, "max_val": 25.0, "series": charts_data["u_chart"]})
             chart_rect = pygame.Rect(10, 175, config.PANEL_WIDTH - 20, 370)
         else:
             chart_rect = pygame.Rect(10, 175, config.PANEL_WIDTH - 20, 320)
@@ -77,9 +77,9 @@ def render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hi
         max_torque = getattr(system.controller, "max_torque", 5.0)
 
         charts = [
-            {"title": "Kat Wahadla [deg]", "min_val": -180.0, "max_val": 180.0, "series": charts_data.get("pendulum_chart", [])},
-            {"title": "Kat Ramienia i Zadany [deg]", "min_val": -180.0, "max_val": 180.0, "series": charts_data.get("arm_chart", [])},
-            {"title": "Moment Sterujacy M [Nm]", "min_val": -max_torque, "max_val": max_torque, "series": charts_data.get("u_chart", [])}
+            {"title": "Pendulum Angle [deg]", "min_val": -180.0, "max_val": 180.0, "series": charts_data.get("pendulum_chart", [])},
+            {"title": "Arm & Setpoint Angle [deg]", "min_val": -180.0, "max_val": 180.0, "series": charts_data.get("arm_chart", [])},
+            {"title": "Control Torque M [Nm]", "min_val": -max_torque, "max_val": max_torque, "series": charts_data.get("u_chart", [])}
         ]
         
         chart_rect = pygame.Rect(10, 210, config.PANEL_WIDTH - 20, 330)
@@ -87,7 +87,7 @@ def render_panel_charts(gui_surface, selected_mode, system, font_small, extra_hi
         status_color = getattr(system, "status_color", (0, 255, 100))
         draw_chart(gui_surface, chart_rect, font_small, charts)
 
-    # RYSOWANIE STATUSU DOKŁADNIE 1 RAZ POD RAMKĄ WYKRESU
+    # DRAW STATUS EXACTLY ONCE BELOW THE CHART BOUNDING BOX
     if chart_rect and status_text:
         txt_surf = font_small.render(status_text, True, status_color)
         gui_surface.blit(txt_surf, (10, chart_rect.bottom + 10))

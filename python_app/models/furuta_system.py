@@ -7,7 +7,7 @@ import config
 
 
 def normalize_angle(angle):
-    """Sprowadza kąt do przedziału [-pi, pi]"""
+    """Normalizes an angle to the range [-pi, pi]"""
     return (angle + math.pi) % (2 * math.pi) - math.pi
 
 
@@ -118,30 +118,30 @@ class FurutaSystem(BaseSystem):
         self.controller = LQRController(self.physics)
         self.setpoint_arm = 0.0
 
-        # Dodatkowe pola dla poprawnego odczytu statusu w rendererze
+        # Additional fields for status reading in the renderer
         self.status_text = ""
         self.status_color = (0, 255, 100)
 
         self.sliders = [
-            Slider(20, 40, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[0], "K_theta1 (Ramie pos)", step=0.1),
-            Slider(20, 75, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[1], "K_omega1 (Ramie vel)", step=0.1),
-            Slider(20, 110, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[2], "K_theta2 (Wahadlo pos)", step=0.1),
-            Slider(20, 145, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[3], "K_omega2 (Wahadlo vel)", step=0.1),
+            Slider(20, 40, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[0], "K_theta1 (Arm pos)", step=0.1),
+            Slider(20, 75, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[1], "K_omega1 (Arm vel)", step=0.1),
+            Slider(20, 110, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[2], "K_theta2 (Pendulum pos)", step=0.1),
+            Slider(20, 145, 200, 10, config.SLIDER_MIN_VAL, config.SLIDER_MAX_VAL, self.controller.K[3], "K_omega2 (Pendulum vel)", step=0.1),
         ]
 
-        self.btn_reset = Button(20, 180, 200, 24, "RESET DO GÓRY (SPACE)")
+        self.btn_reset = Button(20, 180, 200, 24, "RESET UPWARD (SPACE)")
 
         self.MAX_HIST = 150
         self.hist_pend = deque(maxlen=self.MAX_HIST)
         self.hist_arm = deque(maxlen=self.MAX_HIST)
         self.hist_sp = deque(maxlen=self.MAX_HIST)
-        self.hist_u = deque(maxlen=self.MAX_HIST)  # Bufor dla momentu sterującego
+        self.hist_u = deque(maxlen=self.MAX_HIST)  # Buffer for control torque
 
         self.update_status()
 
     def update_status(self):
-        """Aktualizuje atrybuty statusu wewnętrznego."""
-        self.status_text = f"LQR: {'AKTYWNY' if self.controller.active else 'UPADEK (SPACJA)'} | Arm: {math.degrees(self.physics.theta1):.1f}°"
+        """Updates internal status attributes."""
+        self.status_text = f"CONTROL: {'ACTIVE' if self.controller.active else 'FALLEN (SPACE)'} | Arm: {math.degrees(self.physics.theta1):.1f}°"
         self.status_color = (80, 230, 120) if self.controller.active else (230, 80, 80)
 
     def reset_state(self):
@@ -150,7 +150,7 @@ class FurutaSystem(BaseSystem):
         self.hist_pend.clear()
         self.hist_arm.clear()
         self.hist_sp.clear()
-        self.hist_u.clear()  # Czyszczenie bufora sterowania
+        self.hist_u.clear() 
         self.update_status()
 
     def reset(self):
@@ -175,7 +175,7 @@ class FurutaSystem(BaseSystem):
         self.hist_pend.append(math.degrees(self.physics.theta2))
         self.hist_arm.append(math.degrees(self.physics.theta1))
         self.hist_sp.append(math.degrees(self.setpoint_arm))
-        self.hist_u.append(torque)  # Rejestracja sygnału sterującego
+        self.hist_u.append(torque)  # Record control signal
 
         self.update_status()
 

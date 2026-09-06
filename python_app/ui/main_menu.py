@@ -4,7 +4,7 @@ from OpenGL.GL import *
 import pygame
 from pygame.locals import *
 
-# Pamiętaj o zaimportowaniu close_serial, jeśli używasz portu szeregowego
+# Remember to import close_serial if using serial port communication
 # from serial_utils import close_serial
 
 
@@ -15,11 +15,11 @@ class MainMenu:
         self.height = height
 
         self.options = [
-            ("1. Suwnica", "Crane Anti-Sway Control"),
-            ("2. Wahadło Furuty", "Inverted Pendulum LQR"),
-            ("3. Quadrocopter", "PID + Median Filtering"),
+            ("1. Overhead Crane", "Crane Anti-Sway Control"),
+            ("2. Furuta Pendulum", "Inverted Pendulum State Feedback Control"),
+            ("3. Quadrocopter", "2D Position PID Control "),
             ("4. Ball and Plate", "2D Ball Balancing PID"),
-            ("5. Satelita 3D", "Reaction Wheel Control"),
+            ("5. 3D Satellite", "Reaction Wheel Control"),
         ]
 
         self.mode_keys = [
@@ -73,7 +73,7 @@ class MainMenu:
                 if card["rect"].collidepoint(mx, my):
                     self.hovered_index = card["id"]
                     break
-            # Zwraca True tylko wtedy, gdy stan najechania myszy się zmienił (potrzebne do przerysowania)
+            # Returns True only if mouse hover state has changed (triggers redrawing)
             return old_hover != self.hovered_index
 
         elif event.type == MOUSEBUTTONDOWN and event.button == 1:
@@ -90,7 +90,7 @@ class MainMenu:
             "CONTROL SYSTEMS LAB", True, (0, 210, 255)
         )
         sub_txt = self.font_subtitle.render(
-            "Wybierz układ do symulacji i analizy regulatorów",
+            "Select a system for simulation and controller analysis",
             True,
             (160, 175, 200),
         )
@@ -147,7 +147,7 @@ def show_selection_menu(screen, clock):
     w, h = config.WINDOW_WIDTH, config.WINDOW_HEIGHT
     menu = MainMenu(w, h)
 
-    # Inicjalizacja tekstury w OpenGL z odpowiednim rozmiarem
+    # Initialize OpenGL 2D texture with window dimensions
     tex_id = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, tex_id)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
@@ -157,38 +157,38 @@ def show_selection_menu(screen, clock):
     )
 
     menu_surface = pygame.Surface((w, h))
-    needs_update = True  # Flaga określająca konieczność odświeżenia tekstury GPU
+    needs_update = True  # Flag indicating whether GPU texture requires updating
 
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
                 glDeleteTextures([tex_id])
-                # Jeśli zdefiniowałeś close_serial(), odkomentuj poniżej:
+                # If close_serial() is defined, uncomment below:
                 # close_serial()
                 pygame.quit()
                 sys.exit()
 
             res = menu.handle_event(event)
-            if isinstance(res, str):  # Został wybrany tryb
+            if isinstance(res, str):  # A simulation mode was selected
                 glDeleteTextures([tex_id])
                 return res
-            elif res is True:  # Nastąpiła zmiana stanu hover
+            elif res is True:  # Hover state changed
                 needs_update = True
 
-        # Aktualizacja tekstury na GPU tylko w przypadku zmiany stanu menu
+        # Update GPU texture only when menu state changes
         if needs_update:
             menu.draw(menu_surface)
             texture_data = pygame.image.tostring(menu_surface, "RGBA", True)
 
             glBindTexture(GL_TEXTURE_2D, tex_id)
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-            # Użycie SubImage zapobiega alokacji nowej pamięci na karcie
+            # SubImage prevents re-allocating new memory on the GPU
             glTexSubImage2D(
                 GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, texture_data
             )
             needs_update = False
 
-        # Rendering sceny 2D w OpenGL
+        # Render 2D scene in OpenGL
         glClearColor(0.1, 0.12, 0.18, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
